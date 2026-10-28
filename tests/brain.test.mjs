@@ -250,3 +250,21 @@ test('on Claude\'s own window, the answer is just the short line', async () => {
   await brain.handle(evt('Stop', { last_assistant_message: 'All done here.' }));
   assert.equal(said.at(-1).reply, undefined);
 });
+
+test("a permission prompt while you're on another window: she points at Claude's window instead", () => {
+  const { brain, hexa, calls } = rig();
+  hexa.canPoint = () => true;
+  hexa.pointAt = (...a) => { calls.push(['pointAt', ...a]); return Promise.resolve(true); };
+  hexa.stopPointing = () => calls.push(['stopPointing']);
+  brain.onWindows({ fg: 55, wins: [{ id: 55, x: 100, y: 100, w: 800, h: 600, max: false }] });
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x', window_id: 55 }));
+  brain.onWindows({ fg: 99, wins: [{ id: 99, x: 1000, y: 100, w: 800, h: 600, max: false }, { id: 55, x: 100, y: 100, w: 800, h: 600, max: false }] });
+  brain.handle(evt('Notification', { notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' }));
+  const point = calls.find((c) => c[0] === 'pointAt');
+  assert.ok(point, 'pointed');
+  assert.equal(point[1].id, 55);
+  assert.equal(point[2].label, 'CLAUDE');
+  assert.ok(!calls.some((c) => c[0] === 'comeToPointer'));
+  brain.handle(evt('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } }));
+  assert.ok(calls.some((c) => c[0] === 'stopPointing'), 'lets go once answered');
+});

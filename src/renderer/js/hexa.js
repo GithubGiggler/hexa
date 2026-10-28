@@ -84,6 +84,7 @@ export class Hexa {
     this.teleportWatchdog = null;
     this.windows = { fg: 0, wins: [] }; // your windows, front first (main process)
     this.perch = null;                  // { id, dx }: the window she sits on
+    this.pointing = null;               // { rect, aim, side, label, wire } while she points at something
     player.stance('stand');
     this.solve(0);
   }
@@ -132,7 +133,8 @@ export class Hexa {
     this.modeSince = this.now();
     // perched on a window she stays seated while idle or working; anything else gets her up
     if (mode !== 'idle' && mode !== 'work') this.perch = null;
-    const stance = this.perch ? 'sit' : { idle: 'stand', work: 'work', alert: 'alert', sleep: 'sleep', fall: 'fall', drag: 'dragged', peek: 'peek' }[mode];
+    const stance = this.perch ? 'sit' : { idle: 'stand', work: 'work', alert: 'alert', sleep: 'sleep', fall: 'fall', drag: 'dragged', peek: 'peek', point: 'stand' }[mode];
+    if (mode !== 'point' && this.pointing) this.releasePointing();
     if (stance) this.player.stance(stance);
     if (mode !== 'peek') this.upside = false;
   }
@@ -551,6 +553,89 @@ export class Hexa {
     });
   }
 
+  // ---- pointing at things (rules ported from upstream v0.4.3) ----
+
+  // Can she point at this window so you'd see it: not maximised, not tiny, its top not covered.
+  canPoint(win) {
+    return Boolean(win && !win.max && win.w > 120 && win.y > -10 && !this.covered(win, win.x + win.w / 2));
+  }
+
+  // Where to stand to point at rect: beside it, on the side with more room, a bit below its middle
+  // (on the floor for things low on the screen).
+  spotNear(rect) {
+    const s = this.scale;
+    const half = this.size.w / 2 + 30;
+    const reach = 150 * s + 60; // from her to what she points at: room for the arm to shoot out
+    const { x: ax, w: aw, y: ay, h: ah } = this.area;
+    const roomLeft = rect.x - ax;
+    const roomRight = ax + aw - (rect.x + rect.w);
+    let x;
+    if (Math.max(roomLeft, roomRight) >= half * 2 + 40) x = roomRight >= roomLeft ? rect.x + rect.w + reach : rect.x - reach;
+    else x = rect.x + rect.w / 2 < ax + aw / 2 ? ax + aw - half : ax + half; // nowhere beside it: the far side
+    x = Math.min(Math.max(x, ax + half), ax + aw - half);
+    const cy = Math.min(Math.max(rect.y + rect.h / 2, ay), this.floor);
+    const y = cy > ay + ah * 0.6 ? this.floor : Math.min(Math.max(cy + this.size.h * 0.6, ay + this.size.h + 20), this.floor);
+    return { x, y };
+  }
+
+  // The point on rect she aims at: as close to her shoulder as it gets, a little inside it.
+  aimPoint(rect, shoulder) {
+    const inset = Math.min(24, rect.w / 3, rect.h / 3);
+    return {
+      x: Math.min(Math.max(shoulder.x, rect.x + inset), rect.x + rect.w - inset),
+      y: Math.min(Math.max(shoulder.y, rect.y + inset), rect.y + rect.h - inset),
+    };
+  }
+
+  // Go and point at rect, and keep pointing (a wire from her finger, brackets, a tag) until
+  // stopPointing().
+  pointAt(rect, { label = '' } = {}) {
+    if (this.mode === 'background' || BUSY.has(this.mode)) return Promise.resolve(false);
+    if (this.mode === 'sleep' || this.mode === 'suspend') this.wakeUp();
+    this.stopPointing();
+    const spot = this.spotNear(rect);
+    const begin = () => {
+      const shoulder = this.point('neck', 0, 0);
+      const dirToIt = Math.sign(rect.x + rect.w / 2 - this.pos.x) || 1;
+      const side = dirToIt * this.dir > 0 ? 'R' : 'L';
+      this.pointing = { rect, aim: this.aimPoint(rect, shoulder), side, label, wire: null };
+      this.enterMode('point');
+      this.player.play('point', {
+        dir: dirToIt,
+        onCue: (c) => c === 'lock' && this.lockOn(),
+        onEnd: () => this.lockOn(), // the act was cut short: lock on anyway
+      });
+    };
+    this.target = null;
+    if (Math.hypot(spot.x - this.pos.x, spot.y - this.pos.y) > 140) this.teleport(spot, begin);
+    else begin();
+    return Promise.resolve(true);
+  }
+
+  lockOn() {
+    const p = this.pointing;
+    if (!p || p.wire) return;
+    const hand = p.side === 'R' ? 'handR' : 'handL';
+    p.wire = this.fx.pointer(() => this.point(hand, 0, 12), () => this.windows.wins.find((w) => w.id === p.rect.id) || p.rect, { label: p.label });
+    this.voice.play('bolt');
+  }
+
+  releasePointing() {
+    const p = this.pointing;
+    this.pointing = null;
+    p?.wire?.retract();
+  }
+
+  // Done showing: the wire reels back into her finger and the arm drops.
+  stopPointing() {
+    if (!this.pointing) return;
+    this.releasePointing();
+    if (this.mode === 'point') {
+      this.enterMode('idle');
+      this.player.play('unpoint');
+    }
+  }
+
   peek() {
     const spots = peekSpots(this.area, this.size);
     const others = spots.filter((s) => s.side !== this.peekSpot?.side);
@@ -897,6 +982,19 @@ export class Hexa {
     if (this.pointer && (this.mode === 'idle' || this.mode === 'work') && this.nearSince !== null) {
       const hd = this.xf ? this.head() : this.pos;
       pose.head += Math.max(-0.3, Math.min(0.3, (this.pointer.x - hd.x) / 600));
+    }
+    // pointing: the arm toward her aim point, drawn longer to reach it
+    const p = this.pointing;
+    if (p && this.mode === 'point' && this.xf) {
+      const sh = this.point(p.side === 'R' ? 'upperR' : 'upperL', 0, 0);
+      const rect = this.windows.wins.find((w) => w.id === p.rect.id) || p.rect;
+      p.aim = this.aimPoint(rect, sh);
+      const dx = Math.abs(p.aim.x - sh.x);
+      const dy = p.aim.y - sh.y;
+      pose[`arm${p.side}`] = Math.min(2.9, Math.max(0.3, Math.atan2(dx, dy)));
+      pose[`elbow${p.side}`] = 0;
+      pose[`long${p.side}`] = Math.min(2, Math.max(1, Math.hypot(dx, dy) / ((30 + 28 + 12) * this.scale) * 0.8));
+      if (!pose.visor) pose.visor = 'smug';
     }
     this.pose = pose;
     this.xf = solvePose(this.rig, pose, { x: this.pos.x, y: this.pos.y, scale: this.scale, dir: this.dir });

@@ -106,3 +106,17 @@ test('possess draws on the window, lasts until leave(), and follows the window',
   run(fx, 1);
   assert.ok(!fx.effects.some((e) => e.kind === 'possess'));
 });
+
+test('pointer: a tagged wire to a window, reeled back in on retract', () => {
+  const fx = new Fx({ palette, rand });
+  const wire = fx.pointer(() => ({ x: 10, y: 10 }), () => ({ x: 100, y: 100, w: 300, h: 200 }), { label: 'CLAUDE' });
+  run(fx, 1);
+  assert.ok(fx.effects.some((e) => e.kind === 'pointer'), 'holds while pointing');
+  const calls = [];
+  const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : (...a) => { calls.push([k, ...a]); return { addColorStop() {}, width: 40 }; }), set: (t, k, v) => { t[k] = v; return true; } });
+  fx.draw(ctx);
+  assert.ok(calls.some(([k, text]) => k === 'fillText' && text === 'CLAUDE'));
+  wire.retract();
+  run(fx, 0.6);
+  assert.ok(!fx.effects.some((e) => e.kind === 'pointer'));
+});

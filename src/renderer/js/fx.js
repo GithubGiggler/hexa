@@ -298,6 +298,70 @@ export class Fx {
     ctx.restore();
   }
 
+  // Pointing at something: a dashed data wire from her finger to it, brackets on its corners and a
+  // tag. from() and rect() are asked every frame. Returns { retract }: the wire reels back in.
+  pointer(from, rect, { label = '' } = {}) {
+    const e = { kind: 'pointer', from, rect, label, t: 0, life: Infinity, max: Infinity };
+    this.effects.push(e);
+    return {
+      retract: () => {
+        if (e.life === Infinity) {
+          e.life = 0.35;
+          e.max = 0.35;
+        }
+      },
+    };
+  }
+
+  drawPointer(ctx, e) {
+    const r = e.rect();
+    const f = e.from();
+    if (!r || !f) return;
+    const { cyan, magenta, navy, white } = this.palette;
+    const k = e.life === Infinity ? Math.min(1, e.t * 5) : Math.max(0, e.life / e.max);
+    const clampTo = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+    const aim = { x: clampTo(f.x, r.x + 24, r.x + r.w - 24), y: clampTo(f.y, r.y + 24, r.y + r.h - 24) };
+    const end = { x: f.x + (aim.x - f.x) * k, y: f.y + (aim.y - f.y) * k };
+    ctx.save();
+    ctx.strokeStyle = cyan;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([7, 5]);
+    ctx.lineDashOffset = -e.t * 40; // the data runs along it
+    ctx.shadowColor = cyan;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.moveTo(f.x, f.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+    if (e.life === Infinity) {
+      // brackets on its corners
+      const b = Math.min(28, r.w / 4, r.h / 4);
+      ctx.strokeStyle = magenta;
+      ctx.lineWidth = 3;
+      for (const [cx, cy, sx, sy] of [[r.x, r.y, 1, 1], [r.x + r.w, r.y, -1, 1], [r.x, r.y + r.h, 1, -1], [r.x + r.w, r.y + r.h, -1, -1]]) {
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + sy * b);
+        ctx.lineTo(cx, cy);
+        ctx.lineTo(cx + sx * b, cy);
+        ctx.stroke();
+      }
+      if (e.label) {
+        ctx.font = '600 12px "JetBrains Mono", monospace';
+        const w = ctx.measureText(e.label).width + 14;
+        ctx.fillStyle = navy;
+        ctx.fillRect(r.x, Math.max(0, r.y - 22), w, 20);
+        ctx.strokeStyle = magenta;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(r.x, Math.max(0, r.y - 22), w, 20);
+        ctx.fillStyle = white;
+        ctx.fillText(e.label, r.x + 7, Math.max(0, r.y - 22) + 14);
+      }
+    }
+    ctx.restore();
+  }
+
   glitch(ms, strength = 1) {
     this.glitchState = { life: ms / 1000, strength };
   }
@@ -328,6 +392,7 @@ export class Fx {
     this.particles = this.particles.filter((p) => p.life > 0);
 
     for (const e of this.effects) {
+      if (e.kind === 'pointer') e.t += h;
       if (e.kind === 'possess') {
         e.t += h;
         e.clock += h;
@@ -423,6 +488,8 @@ export class Fx {
         ctx.stroke();
       } else if (e.kind === 'possess') {
         this.drawPossess(ctx, e);
+      } else if (e.kind === 'pointer') {
+        this.drawPointer(ctx, e);
       } else if (e.kind === 'flash') {
         const tone = e.tone === 'red' ? red : e.tone === 'ink' ? navy : white;
         const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, 240);

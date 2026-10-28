@@ -268,6 +268,26 @@ export const ACTS = {
     ],
   },
 
+  // pointing at something: her head snaps to it, she coils away, then strikes (her arm is aimed by
+  // hexa.js while she points; this is the body around it)
+  point: {
+    directional: true,
+    keys: [
+      [2, { head: 0.25, tilt: -2, visor: 'wide' }],
+      [3, { head: 0.3, tilt: -10, bristle: 0.5, sy: 0.95, visor: 'squint' }],
+      [1, { tilt: 8, smear: [16, 0], bristle: 1 }, 'lock'],
+      [4, { tilt: 5, visor: 'smug' }],
+    ],
+  },
+
+  unpoint: {
+    directional: true,
+    keys: [
+      [2, { tilt: -4 }],
+      [2, {}],
+    ],
+  },
+
   // the end of her boot: visor still loading, then a wave
   bootWave: {
     keys: [

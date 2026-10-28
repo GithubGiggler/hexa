@@ -129,6 +129,10 @@ export class Brain {
     if (s.waiting && name !== 'Notification') {
       s.waiting = false;
       this.panel.clearKind('alert');
+      if (s.pointedAt) {
+        s.pointedAt = false;
+        this.hexa.stopPointing?.();
+      }
       // she may still be on her way to your pointer (mid-teleport): that counts too
       if (this.hexa.mode === 'alert' || this.hexa.alerting) this.hexa.setMode(s.working ? 'work' : 'idle');
     }
@@ -198,6 +202,15 @@ export class Brain {
     if (ALERTS.has(type)) {
       s.waiting = true;
       this.voice.play('alert');
+      // you're on another window: she goes and points at Claude's, where the question is
+      const win = this.away(s) && this.windows.wins.find((w) => w.id === s.window);
+      if (win && this.hexa.canPoint?.(win)) {
+        s.pointedAt = true;
+        this.say('alert', this.line('alertHere', s), s, { face: 'wide', quote: clip(String(evt.message || ''), 200), hold: null });
+        this.panel.setTicker({ verb: 'WAITING', target: 'for you', state: 'waiting' });
+        this.hexa.pointAt(win, { label: 'CLAUDE' });
+        return;
+      }
       this.say('alert', this.line('alert', s), s, { face: 'wide', quote: clip(String(evt.message || ''), 200), hold: null });
       this.panel.setTicker({ verb: 'WAITING', target: 'for you', state: 'waiting' });
       this.hexa.comeToPointer();

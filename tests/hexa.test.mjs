@@ -389,3 +389,54 @@ test('possess is off when she is not sitting, the setting is off, or motion is r
     assert.equal(h.canPossess(), false, JSON.stringify(settings));
   }
 });
+
+// ---- pointing (M2) ----
+
+const overlaps = (a, b) => a[0] < b.x + b.w && b.x < a[0] + a[2] && a[1] < b.y + b.h && b.y < a[1] + a[3];
+
+test('pointAt: she goes beside the window and points at it, with a tagged wire', () => {
+  const { h, fxCalls, advance } = make();
+  const win = konsole();
+  h.setWindows({ fg: 9, wins: [win] });
+  h.pointAt(win, { label: 'CLAUDE' });
+  advance(2.5);
+  assert.equal(h.mode, 'point');
+  assert.equal(h.pointing.rect.id, 5);
+  for (const r of h.hitRects()) assert.ok(!overlaps(r, win), 'she stands beside it, not on it');
+  const wire = fxCalls.find((c) => c[0] === 'pointer');
+  assert.ok(wire, 'a wire from her finger');
+  assert.equal(wire[3].label, 'CLAUDE');
+  const side = h.pointing.side;
+  assert.ok(h.pose[side === 'R' ? 'armR' : 'armL'] > 0.5, 'her arm is up toward it');
+});
+
+test('stopPointing lets go', () => {
+  const { h, advance } = make();
+  h.setWindows({ fg: 9, wins: [konsole()] });
+  h.pointAt(konsole(), { label: 'CLAUDE' });
+  advance(2.5);
+  h.stopPointing();
+  advance(0.5);
+  assert.equal(h.pointing, null);
+  assert.notEqual(h.mode, 'point');
+});
+
+test('canPoint refuses windows you could not see', () => {
+  const { h } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  assert.equal(h.canPoint(konsole()), true);
+  assert.equal(h.canPoint(konsole({ max: true })), false, 'maximised');
+  assert.equal(h.canPoint({ ...konsole(), w: 80 }), false, 'tiny');
+  h.setWindows({ fg: 9, wins: [{ id: 9, x: 0, y: 300, w: 2560, h: 900, max: false }, konsole()] });
+  assert.equal(h.canPoint(konsole()), false, 'its top is under another window');
+  assert.equal(h.canPoint(null), false);
+});
+
+test('spotNear keeps her on screen beside the window, wherever it is', () => {
+  const { h } = make();
+  for (const win of [konsole({ x: 0, y: 40 }), konsole({ x: 1660, y: 40 }), konsole({ x: 0, y: 900 }), konsole({ x: 1660, y: 900 }), konsole({ x: 200, y: 200, w: 2200 })]) {
+    const s = h.spotNear(win);
+    assert.ok(s.x - h.size.w / 2 >= AREA.x && s.x + h.size.w / 2 <= AREA.x + AREA.w, JSON.stringify(win));
+    assert.ok(s.y <= AREA.y + AREA.h && s.y - h.size.h >= AREA.y, JSON.stringify(win));
+  }
+});
