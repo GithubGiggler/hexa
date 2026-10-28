@@ -205,3 +205,13 @@ test('status() is a line about the work, or an idle line', () => {
   clock.set(65000);
   assert.match(brain.status(), /penguin-api.*1 action.*1m 05s/);
 });
+
+test('the alert clears even if Hexa is mid-move toward the pointer', () => {
+  const { brain, hexa } = rig();
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  brain.handle(evt('Notification', { notification_type: 'permission_prompt' }));
+  hexa.mode = 'teleport';
+  hexa.alerting = true;
+  brain.handle(evt('PermissionDenied', { tool_name: 'Bash' })); // an event that doesn't set a mode itself
+  assert.equal(hexa.mode, 'work');
+});

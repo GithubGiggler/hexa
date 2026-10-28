@@ -125,7 +125,8 @@ export class Brain {
     if (s.waiting && name !== 'Notification') {
       s.waiting = false;
       this.panel.clearKind('alert');
-      if (this.hexa.mode === 'alert') this.hexa.setMode(s.working ? 'work' : 'idle');
+      // she may still be on her way to your pointer (mid-teleport): that counts too
+      if (this.hexa.mode === 'alert' || this.hexa.alerting) this.hexa.setMode(s.working ? 'work' : 'idle');
     }
 
     switch (name) {
