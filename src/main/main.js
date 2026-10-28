@@ -161,7 +161,7 @@ function start() {
     }
     if (name === 'state') {
       const wm = x11 ? await x11.windowInfo(overlay.xid).catch((err) => ({ error: err.message })) : null;
-      return { ok: true, ...(await askRenderer()), overlay: overlay.mode, display: overlay.display.bounds, window: overlay.win.getBounds(), viewport: overlay.viewport, wm };
+      return { ok: true, ...(await askRenderer()), overlay: overlay.mode, display: overlay.display.bounds, window: overlay.win.getBounds(), viewport: overlay.viewport, xid: overlay.xid, wm };
     }
     return { ok: false, error: `no debug route "${name}"` };
   }

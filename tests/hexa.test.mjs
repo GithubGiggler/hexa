@@ -274,3 +274,25 @@ test('sleepNow() and suspendNow() skip the waiting (for the demo)', () => {
   assert.equal(h.mode, 'suspend');
   assert.equal(h.hitRects().length, 1, 'just her core');
 });
+
+test('a zap asked for while she teleports does not leave her stuck teleporting', () => {
+  const { h, advance } = make();
+  h.teleport({ x: 600, y: 900 });
+  advance(0.1);
+  h.zap({ x: 700, y: 700 });
+  advance(2);
+  assert.notEqual(h.mode, 'teleport');
+  assert.deepEqual(h.pos, { x: 600, y: 900 });
+});
+
+test('a teleport whose animation gets cut off still arrives', () => {
+  const { h, player, advance } = make();
+  h.teleport({ x: 600, y: 900 });
+  advance(0.1);
+  player.play('hop'); // something replaced teleportOut before it ended
+  advance(4);
+  assert.notEqual(h.mode, 'teleport');
+  assert.deepEqual(h.pos, { x: 600, y: 900 });
+  assert.equal(h.hidden, false);
+  assert.equal(h.alpha, 1);
+});

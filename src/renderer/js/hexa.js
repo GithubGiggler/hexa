@@ -21,6 +21,7 @@ const FLOAT_RATE = 4.5;               // how fast she floats to a spot (per seco
 const ALERT_OFFSET = 70;              // how far beside your pointer she waits when Claude needs you
 const TELEPORT_FAR = 400;             // further than this, she teleports instead of floating
 const TELEPORT_GAP = 250;             // ms between vanishing and arriving
+const TELEPORT_WATCHDOG_MS = 2500;    // a teleport takes about 1 s; past this, she's put where she was going
 const WANDER = [45000, 90000];
 
 const BOOT_LOG = [
@@ -77,6 +78,7 @@ export class Hexa {
     this.onSay = null;
     this.peekSpot = null;
     this.resumeMode = null;
+    this.teleportWatchdog = null;
     player.stance('stand');
     this.solve(0);
   }
@@ -324,7 +326,11 @@ export class Hexa {
     this.resumeMode = this.mode === 'peek' || this.mode === 'teleport' ? 'idle' : this.mode;
     this.enterMode('teleport');
     this.target = null;
+    let arrived = false;
     const arrive = () => {
+      if (arrived) return;
+      arrived = true;
+      this.teleportWatchdog = null;
       this.pos = { ...dest };
       this.resetChains();
       const resume = this.resumeMode;
@@ -336,6 +342,19 @@ export class Hexa {
       } else {
         this.settleMode(resume);
       }
+    };
+    // If anything cuts her teleport animation short (another act played over it), she must still
+    // arrive instead of staying hidden mid-teleport forever.
+    this.teleportWatchdog = {
+      until: this.now() + TELEPORT_WATCHDOG_MS,
+      finish: () => {
+        this.player.stop();
+        this.hidden = false;
+        this.alpha = 1;
+        this.fade = null;
+        this.dropFarEffects();
+        arrive();
+      },
     };
     if (this.reduced) {
       this.setFade(0, 150);
@@ -586,6 +605,7 @@ export class Hexa {
     const h = Math.min(0.05, Math.max(0, dt || 0));
     const now = this.now();
     this.runTasks();
+    if (this.mode === 'teleport' && this.teleportWatchdog && now >= this.teleportWatchdog.until) this.teleportWatchdog.finish();
     this.player.tick(h * 1000);
 
     if (this.fade) {
@@ -687,6 +707,8 @@ export class Hexa {
   }
 
   zap(p) {
+    // mid-teleport, asleep or held: not now (playing over a teleport would cut it short)
+    if (BUSY.has(this.mode) || this.mode === 'sleep' || this.mode === 'suspend') return;
     this.lastZap = this.now();
     const dir = Math.sign(p.x - this.pos.x) || 1;
     this.player.play('zap', {

@@ -169,6 +169,7 @@ let showing = false;
 async function showcase() {
   if (showing) return;
   showing = true;
+  hexa.setSettings({ wander: false }); // no drifting off in the middle of a trick
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const tell = (line, face = 'smug') => panel.say({ kind: 'info', line, face, hold: 2600 });
   try {
@@ -198,6 +199,7 @@ async function showcase() {
     tell('That\'s me. Right-click me for my menu.', 'laugh');
   } finally {
     showing = false;
+    hexa.setSettings({ wander: cfg.wander });
   }
 }
 
