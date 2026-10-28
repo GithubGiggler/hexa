@@ -106,6 +106,12 @@ host.onConfig((c) => {
 
 host.onPointer((p) => hexa.onPointer(p));
 
+// where your windows are (front first), for sitting on them and knowing which one is Claude's
+host.onWindows((snap) => {
+  hexa.setWindows(snap);
+  brain.onWindows(snap);
+});
+
 host.answerState(() => ({ mode: hexa.mode, pos: hexa.pos, hitRects: [...hexa.hitRects(), ...panel.rects()] }));
 
 // ---- the mouse, on her ----

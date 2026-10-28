@@ -22,6 +22,7 @@ const ALERT_OFFSET = 70;              // how far beside your pointer she waits w
 const TELEPORT_FAR = 400;             // further than this, she teleports instead of floating
 const TELEPORT_GAP = 250;             // ms between vanishing and arriving
 const TELEPORT_WATCHDOG_MS = 2500;    // a teleport takes about 1 s; past this, she's put where she was going
+const SEAT_DY = 66;                   // from her hips down to her root, seated (thighs folded)
 const WANDER = [45000, 90000];
 
 const BOOT_LOG = [
@@ -79,6 +80,8 @@ export class Hexa {
     this.peekSpot = null;
     this.resumeMode = null;
     this.teleportWatchdog = null;
+    this.windows = { fg: 0, wins: [] }; // your windows, front first (main process)
+    this.perch = null;                  // { id, dx }: the window she sits on
     player.stance('stand');
     this.solve(0);
   }
@@ -125,7 +128,9 @@ export class Hexa {
   enterMode(mode) {
     this.mode = mode;
     this.modeSince = this.now();
-    const stance = { idle: 'stand', work: 'work', alert: 'alert', sleep: 'sleep', fall: 'fall', drag: 'dragged', peek: 'peek' }[mode];
+    // perched on a window she stays seated while idle or working; anything else gets her up
+    if (mode !== 'idle' && mode !== 'work') this.perch = null;
+    const stance = this.perch ? 'sit' : { idle: 'stand', work: 'work', alert: 'alert', sleep: 'sleep', fall: 'fall', drag: 'dragged', peek: 'peek' }[mode];
     if (stance) this.player.stance(stance);
     if (mode !== 'peek') this.upside = false;
   }
@@ -214,9 +219,81 @@ export class Hexa {
     this.player.play(act, { dir: opts.dir ?? this.dir, onCue: (c) => this.cue(c) });
   }
 
+  // Claude started: to work, perched on the window in front if she can sit on it.
   goToWork() {
     this.activity();
     this.setMode('work');
+    if (BUSY.has(this.mode) || this.mode === 'alert') return;
+    const seat = this.pickSeat({ frontOnly: true });
+    if (seat && this.perch?.id !== seat.win.id) this.sitOn(seat);
+  }
+
+  // ---- your windows (rules ported from upstream v0.4.3) ----
+
+  setWindows(snap) {
+    this.windows = snap || { fg: 0, wins: [] };
+    if (!this.perch || this.drag || BUSY.has(this.mode)) return;
+    const win = this.windows.wins.find((w) => w.id === this.perch.id);
+    const dx = win ? Math.min(Math.max(this.perch.dx, 50), win.w - 60) : 0;
+    if (!win || !this.canSit(win) || this.covered(win, win.x + dx)) {
+      // the ledge is gone: closed, minimised, maximised or covered
+      this.vy = 0;
+      this.enterMode('fall');
+      return;
+    }
+    this.pos = this.seat(win, dx); // ride along with the window
+  }
+
+  // Where her root goes so that her hips rest on the window's top edge.
+  seat(win, dx) {
+    return { x: win.x + dx, y: win.y + SEAT_DY * this.scale };
+  }
+
+  canSit(win) {
+    const roomAbove = this.size.h * 0.75 + 12;
+    return !win.max && win.w > 260 && win.y > this.area.y + roomAbove && win.y < this.floor - 80;
+  }
+
+  // Is her spot on that ledge hidden under a window that's in front of it?
+  covered(win, x) {
+    const half = 34 * this.scale;
+    for (const o of this.windows.wins) {
+      if (o.id === win.id) return false; // reached it: everything after is behind
+      if (o.x < x + half && o.x + o.w > x - half && o.y <= win.y && o.y + o.h >= win.y) return true;
+    }
+    return false;
+  }
+
+  // A window she could sit on, the one in front first: { win, dx } or null.
+  pickSeat({ frontOnly = false, except = null } = {}) {
+    const options = [];
+    for (const win of this.windows.wins) {
+      if (win.id === except || !this.canSit(win)) continue;
+      const dx = Math.min(Math.max(between(win.w * 0.18, win.w * 0.6, this.rand), 60), Math.max(60, win.w - 190));
+      if (this.covered(win, win.x + dx)) continue;
+      options.push({ win, dx });
+    }
+    const front = options.find((o) => o.win.id === this.windows.fg);
+    if (frontOnly) return front || null;
+    return front || options[0] || null;
+  }
+
+  sitOn({ win, dx }) {
+    this.teleport(this.seat(win, dx), () => {
+      this.perch = { id: win.id, dx };
+      this.enterMode(this.mode === 'teleport' ? 'idle' : this.mode);
+    });
+  }
+
+  // A window whose top edge is within tol of hipY under x, that she could sit on.
+  ledgeUnder(x, hipY, tol) {
+    return this.windows.wins.find((w) => Math.abs(w.y - hipY) <= tol && x >= w.x + 40 && x <= w.x + w.w - 40
+      && this.canSit(w) && !this.covered(w, x)) || null;
+  }
+
+  perchOn(win, x) {
+    this.perch = { id: win.id, dx: x - win.x };
+    this.pos = this.seat(win, this.perch.dx);
   }
 
   towardCenter() {
@@ -457,6 +534,14 @@ export class Hexa {
     if (!this.drag) return;
     this.drag = null;
     this.activity();
+    // let go with her hips on a window's top edge: she sits there
+    const ledge = this.ledgeUnder(this.pos.x, this.pos.y - SEAT_DY * this.scale, 24);
+    if (ledge) {
+      this.perchOn(ledge, this.pos.x);
+      this.settleMode('idle');
+      this.say('dropped');
+      return;
+    }
     if (this.pos.y < this.floor - 2) {
       this.vy = 0;
       this.enterMode('fall');
@@ -604,9 +689,23 @@ export class Hexa {
     }
 
     if (this.mode === 'fall') {
+      const hipBefore = this.pos.y - SEAT_DY * this.scale;
       const s = fallStep({ y: this.pos.y, vy: this.vy }, h, this.floor);
-      this.pos.y = s.y;
-      this.vy = s.vy;
+      const hipAfter = s.y - SEAT_DY * this.scale;
+      // a window ledge under her on the way down catches her
+      const ledge = this.windows.wins.find((w) => w.y >= hipBefore && w.y <= hipAfter && this.pos.x >= w.x + 40
+        && this.pos.x <= w.x + w.w - 40 && this.canSit(w) && !this.covered(w, this.pos.x));
+      if (ledge) {
+        this.vy = 0;
+        this.perchOn(ledge, this.pos.x);
+        this.enterMode('idle');
+        this.player.play('land', { onCue: (c) => this.cue(c) });
+        this.say('landed');
+        s.landed = false;
+      } else {
+        this.pos.y = s.y;
+        this.vy = s.vy;
+      }
       if (s.landed) {
         this.enterMode('idle');
         this.player.play('land', { onCue: (c) => this.cue(c), onEnd: () => this.settleMode(this.mode === 'idle' ? 'idle' : this.mode) });

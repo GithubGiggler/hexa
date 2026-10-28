@@ -21,6 +21,8 @@ const { registerPrivileged, registerHexaProtocol } = require('./protocol');
 const { buildMenu, createTray } = require('./tray');
 const { trayLabels } = require('./labels');
 const { playDemo } = require('./demo');
+const { startX11Windows } = require('./platform/linux/windows-x11');
+const { parentChain, windowForChain } = require('./platform/linux/proc');
 
 const DEV = process.argv.includes('--dev');
 const appDir = app.getAppPath();
@@ -66,6 +68,8 @@ function start() {
   let reducedMotion = false;
   let trayStatus = null;
   let stopDemo = null;
+  let windows = null;          // the window tracker
+  let lastWindows = { fg: 0, wins: [] };
   const pendingState = new Map();
   let stateSeq = 0;
 
@@ -159,7 +163,7 @@ function start() {
       fs.writeFileSync(file, image.toPNG());
       return { ok: true, file };
     }
-    if (name === 'state') return { ok: true, ...(await askRenderer()), overlay: overlay.mode, display: overlay.display.bounds, xid: overlay.xid };
+    if (name === 'state') return { ok: true, ...(await askRenderer()), overlay: overlay.mode, display: overlay.display.bounds, xid: overlay.xid, windows: lastWindows };
     return { ok: false, error: `no debug route "${name}"` };
   }
 
@@ -224,10 +228,32 @@ function start() {
     });
     console.log(`[hexa] overlay on display ${overlay.display.id} (${overlay.display.bounds.width}×${overlay.display.bounds.height}), click-through by ${overlay.mode}`);
 
+    if (x11) {
+      windows = await startX11Windows({
+        x11,
+        selfXid: overlay.xid,
+        getDisplay: () => overlay.display,
+        onUpdate: (snap) => {
+          lastWindows = snap;
+          send('windows:update', snap);
+        },
+      }).catch((err) => {
+        console.error('[hexa] window tracking unavailable:', err.message);
+        return null;
+      });
+    }
+
     try {
       bridge = await createBridge({
         socketPath: paths.socketPath(),
-        onEvent: (evt) => send('hexa:event', evt),
+        onEvent: (evt) => {
+          // Claude's window: the closest process up the hook's tree that owns one
+          if (evt.ppid) {
+            const win = windowForChain(parentChain(evt.ppid), lastWindows.wins);
+            if (win) evt.window_id = win.id;
+          }
+          send('hexa:event', evt);
+        },
         onCli,
         onDebug: DEV ? onDebug : undefined,
       });
@@ -251,6 +277,7 @@ function start() {
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     bridge?.close();
+    windows?.stop();
     overlay?.destroy();
     x11?.close();
   });

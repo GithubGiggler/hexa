@@ -59,6 +59,8 @@ export class Brain {
     this.watching = true;   // she follows Claude Code (off: she just keeps you company)
     this.userName = '';
     this.thinking = null;   // { s, since, said } while Claude is quiet mid-task
+    this.windows = { fg: 0, wins: [] }; // the latest window snapshot (main process)
+    this.replyFor = null;   // the session whose whole answer she's holding up for you
   }
 
   get t() {
@@ -85,6 +87,8 @@ export class Brain {
       this.sessions.set(id, s);
     }
     if (evt.cwd) s.project = basename(evt.cwd);
+    // the main process found the window the hook's process tree belongs to: Claude's
+    if (evt.window_id) s.window = evt.window_id;
     if (evt.session_title) s.title = evt.session_title;
     s.seen = this.now();
     return s;
@@ -154,6 +158,8 @@ export class Brain {
 
   onPrompt(evt, s) {
     Object.assign(s, { taskStart: this.now(), count: 0, files: new Set(), working: true, last: null });
+    // no process-tree match: the window in front when you send a prompt is the one you typed it in
+    if (!evt.window_id) s.window = this.windows.fg || s.window || null;
     this.hexa.goToWork();
     const prompt = String(evt.prompt || '').replace(/\s+/g, ' ').trim();
     this.say('work', this.line('prompt', s), s, { quote: prompt ? clip(prompt, 110) : '', face: 'calm', hold: 4500 });
@@ -212,12 +218,33 @@ export class Brain {
     ].filter(Boolean).join(' · ');
   }
 
+  // Is the window you typed your prompt in (Claude's) no longer the one in front?
+  // Unknown (no window tracking) counts as no.
+  away(s) {
+    return Boolean(s.window && this.windows.fg && this.windows.fg !== s.window);
+  }
+
+  // Back on Claude's window: the answer she was holding up for you can go.
+  onWindows(snap) {
+    this.windows = snap || { fg: 0, wins: [] };
+    const s = this.replyFor;
+    if (s && this.windows.fg === s.window) {
+      this.replyFor = null;
+      this.panel.clearKind('done');
+    }
+  }
+
   async onStop(evt, s) {
     const wasWorking = s.working;
     s.working = false;
     this.thinking = null;
     const summary = this.summary(s);
     const quote = lastSentence(evt.last_assistant_message);
+    // not on Claude's window any more: you can't see the answer, so she brings it to you, whole,
+    // and holds it up until you're back on Claude's window or click it away
+    const reply = this.away(s) ? String(evt.last_assistant_message || '') : '';
+    const extra = reply ? { reply, hold: null } : {};
+    if (reply) this.replyFor = s;
     this.settle();
     const elapsed = s.taskStart === null ? 0 : this.now() - s.taskStart;
     const bigJob = s.count >= BIG_JOB_ACTIONS || elapsed > BIG_JOB_MS;
@@ -225,12 +252,12 @@ export class Brain {
       // a quick back-and-forth doesn't deserve the whole show
       this.voice.play('done');
       this.hexa.perform('hop');
-      this.say('done', this.line('doneQuiet', s), s, { face: 'calm', summary, quote, hold: 7000 });
+      this.say('done', this.line('doneQuiet', s), s, { face: 'calm', summary, quote, hold: 7000, ...extra });
       return;
     }
     // the panel comes in once she's back down from her victory pose
     await this.hexa.celebrate(summary);
-    this.say('done', this.line('done', s), s, { face: 'laugh', summary, quote, hold: 14000 });
+    this.say('done', this.line('done', s), s, { face: 'laugh', summary, quote, hold: 14000, ...extra });
   }
 
   onStopFailure(evt, s) {

@@ -279,3 +279,80 @@ test('a teleport whose animation gets cut off still arrives', () => {
   assert.equal(h.hidden, false);
   assert.equal(h.alpha, 1);
 });
+
+// ---- windows (M2): sitting and riding, rules ported from upstream v0.4.3 ----
+
+const konsole = (extra = {}) => ({ id: 5, x: 400, y: 600, w: 900, h: 500, max: false, ...extra });
+
+test('while Claude works she perches on the window in front', () => {
+  const { h, player, advance } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  h.goToWork();
+  advance(1.5);
+  assert.equal(h.perch?.id, 5);
+  assert.equal(h.mode, 'work');
+  assert.equal(player.stanceName, 'sit');
+  assert.equal(h.pos.y, 600 + 66);
+  assert.ok(h.pos.x > 400 && h.pos.x < 1300);
+});
+
+test('she rides along when her window moves', () => {
+  const { h, advance } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  h.goToWork();
+  advance(1.5);
+  const dx = h.pos.x - 400;
+  h.setWindows({ fg: 5, wins: [konsole({ x: 500, y: 550 })] });
+  assert.deepEqual(h.pos, { x: 500 + dx, y: 550 + 66 });
+});
+
+test('she falls when her window closes, is maximised or is covered', () => {
+  for (const next of [
+    { fg: 0, wins: [] },
+    { fg: 5, wins: [konsole({ max: true })] },
+    { fg: 9, wins: [{ id: 9, x: 0, y: 300, w: 2560, h: 900, max: false }, konsole()] },
+  ]) {
+    const { h, advance } = make();
+    h.setWindows({ fg: 5, wins: [konsole()] });
+    h.goToWork();
+    advance(1.5);
+    assert.equal(h.perch?.id, 5);
+    h.setWindows(next);
+    assert.equal(h.mode, 'fall', JSON.stringify(next));
+    assert.equal(h.perch, null);
+  }
+});
+
+test('dropped with her hips on a window edge, she sits there', () => {
+  const { h, player } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  const grab = { x: h.pos.x, y: h.pos.y - 120 }; // held 120 px above her root
+  assert.equal(h.onDragStart(grab), true);
+  // carry her so her root is at y 656: her hips (66 px up) end 10 px above the window's top edge
+  h.onDragMove({ x: 800, y: 656 - 120 });
+  h.onDragEnd({ x: 800, y: 656 - 120 });
+  assert.equal(h.perch?.id, 5);
+  assert.equal(h.pos.y, 600 + 66);
+  assert.equal(player.stanceName, 'sit');
+});
+
+test('falling past a window under her, she is caught by its ledge', () => {
+  const { h, advance, said } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  h.pos = { x: 800, y: 300 };
+  h.vy = 0;
+  h.enterMode('fall');
+  advance(2);
+  assert.equal(h.perch?.id, 5);
+  assert.equal(h.pos.y, 600 + 66);
+  assert.ok(said.includes('landed'));
+});
+
+test('pickSeat prefers the window in front and skips covered spots', () => {
+  const { h } = make();
+  const back = { id: 7, x: 100, y: 700, w: 900, h: 500, max: false };
+  h.setWindows({ fg: 5, wins: [konsole(), back] });
+  assert.equal(h.pickSeat().win.id, 5);
+  assert.equal(h.pickSeat({ except: 5 })?.win.id ?? null, null, 'window 7 is covered by window 5 around its top edge, or too low');
+  assert.equal(h.pickSeat({ frontOnly: true }).win.id, 5);
+});

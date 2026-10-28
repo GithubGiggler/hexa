@@ -215,3 +215,38 @@ test('the alert clears even if Hexa is mid-move toward the pointer', () => {
   brain.handle(evt('PermissionDenied', { tool_name: 'Bash' })); // an event that doesn't set a mode itself
   assert.equal(hexa.mode, 'work');
 });
+
+test("Claude's window comes from the hook's process tree, else the window in front at the prompt", () => {
+  const { brain } = rig();
+  brain.onWindows({ fg: 70, wins: [] });
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x', window_id: 55 }));
+  assert.equal(brain.sessions.get('s1').window, 55);
+  brain.handle({ ...evt('UserPromptSubmit', { prompt: 'y' }), session_id: 's2' });
+  assert.equal(brain.sessions.get('s2').window, 70);
+});
+
+test('an answer that lands while you are on another window is shown whole, until you are back', async () => {
+  const { brain, said, calls, clock } = rig();
+  clock.set(0);
+  brain.onWindows({ fg: 55, wins: [] });
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x', window_id: 55 }));
+  brain.onWindows({ fg: 99, wins: [] }); // you went elsewhere
+  clock.set(5000);
+  await brain.handle(evt('Stop', { last_assistant_message: 'Done.\n\n- one\n- two' }));
+  const msg = said.at(-1);
+  assert.equal(msg.kind, 'done');
+  assert.equal(msg.reply, 'Done.\n\n- one\n- two');
+  assert.equal(msg.hold, null);
+  brain.onWindows({ fg: 55, wins: [] }); // back on Claude's window
+  assert.ok(calls.some((c) => c[0] === 'clearKind' && c[1] === 'done'));
+});
+
+test('on Claude\'s own window, the answer is just the short line', async () => {
+  const { brain, said, clock } = rig();
+  clock.set(0);
+  brain.onWindows({ fg: 55, wins: [] });
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x', window_id: 55 }));
+  clock.set(5000);
+  await brain.handle(evt('Stop', { last_assistant_message: 'All done here.' }));
+  assert.equal(said.at(-1).reply, undefined);
+});

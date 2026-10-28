@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('host', {
   onPointer: on('pointer'),
   onArea: on('overlay:area'),
   onConfig: on('hexa:config'),
+  onWindows: on('windows:update'),
   getConfig: () => ipcRenderer.invoke('config:get'),
   getArea: () => ipcRenderer.invoke('overlay:area'),
   setConfig: (patch) => ipcRenderer.invoke('config:set', patch),
