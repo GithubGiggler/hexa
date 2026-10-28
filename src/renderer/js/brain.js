@@ -237,6 +237,12 @@ export class Brain {
     return Boolean(s.window && this.windows.fg && this.windows.fg !== s.window);
   }
 
+  // The window of the session you talked to last (for her guide), or null.
+  claudeWindow() {
+    const s = [...this.sessions.values()].filter((v) => v.window).sort((a, b) => b.seen - a.seen)[0];
+    return (s && this.windows.wins.find((w) => w.id === s.window)) || null;
+  }
+
   // Back on Claude's window: the answer she was holding up for you can go.
   onWindows(snap) {
     this.windows = snap || { fg: 0, wins: [] };

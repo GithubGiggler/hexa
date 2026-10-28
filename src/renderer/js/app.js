@@ -12,6 +12,7 @@ import { Voice } from './voice.js';
 import { Brain } from './brain.js';
 import { linesFor } from './lines/index.js';
 import { pick, fmt } from './util.js';
+import { Guide } from './guide.js';
 
 const host = window.host;
 const HIT_EVERY_MS = 33;
@@ -56,6 +57,7 @@ panel.setTicker = (t) => {
 };
 
 const lines = () => linesFor(cfg.lang || 'en');
+const guide = new Guide({ hexa, panel, host, brain, lines });
 const vars = { name: 'Claude', user: 'there' };
 hexa.onSay = (key) => {
   const t = lines();
@@ -93,6 +95,7 @@ host.onCommand(({ name }) => {
   else if (name === 'teleport') hexa.teleport();
   else if (name === 'resume') brain.resume();
   else if (name === 'showcase') showcase();
+  else if (name === 'guide') guide.menu();
 });
 
 host.onConfig((c) => {
@@ -230,9 +233,10 @@ if (!cfg.visible) {
 } else {
   hexa.boot();
   if (!cfg.welcomed) {
+    // her welcome, the first time: who she is, and plugging her into Claude in one click
     setTimeout(() => {
-      panel.say({ kind: 'info', line: 'Right-click me for my menu. "Install Claude Code hooks" plugs me into Claude.', face: 'smug', hold: 9000 });
       host.setConfig({ welcomed: true });
+      guide.welcome();
     }, 6500);
   }
 }

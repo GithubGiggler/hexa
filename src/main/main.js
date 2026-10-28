@@ -112,6 +112,7 @@ function start() {
       trayHandle?.rebuild();
     },
     teleport: () => send('hexa:command', { name: 'teleport' }),
+    guide: () => send('hexa:command', { name: 'guide' }),
     demo: () => {
       stopDemo?.();
       stopDemo = playDemo((evt) => send('hexa:event', evt));
@@ -203,6 +204,27 @@ function start() {
       }
     });
     ipcMain.handle('hooks:status', () => claudeHooks.status());
+    // her guide: ~/.claude in your file manager, settings.json selected when it exists
+    ipcMain.handle('guide:claudeFolder', () => {
+      const file = claudeHooks.settingsPath();
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      if (fs.existsSync(file)) shell.showItemInFolder(file);
+      else shell.openPath(path.dirname(file));
+      return true;
+    });
+    // where her tray icon is: the tray's own bounds when the desktop reports them (on KDE's
+    // StatusNotifierItem it doesn't), else the panel's end of the screen, from the work area
+    ipcMain.handle('guide:tray', () => {
+      const d = overlay.display;
+      const b = d.bounds;
+      const wa = d.workArea;
+      const t = trayHandle?.tray.getBounds?.();
+      if (t && t.width > 0 && t.height > 0) return [t.x - b.x, t.y - b.y, t.width, t.height];
+      if (wa.y > b.y) return [b.width - 260, 0, 240, wa.y - b.y];                                // panel on top
+      const bottom = wa.y + wa.height;
+      if (bottom < b.y + b.height) return [b.width - 260, bottom - b.y, 240, b.y + b.height - bottom]; // at the bottom
+      return null; // no panel on this screen
+    });
     ipcMain.handle('hooks:install', () => installHooks());
     ipcMain.on('debug:state', (_e, { id, state }) => {
       const resolve = pendingState.get(id);

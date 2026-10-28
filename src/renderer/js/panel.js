@@ -70,7 +70,9 @@ export class Panel {
 
   // ---- the panel ----
 
-  say({ kind = 'info', line = '', tag = '', face = 'calm', hold = 4500, quote = '', summary = '', reply = '' }) {
+  // actions: [{ id, label, primary }]; onAction(id) when one is clicked, onDismiss() when the panel
+  // goes away any other way (clicked, replaced, cleared)
+  say({ kind = 'info', line = '', tag = '', face = 'calm', hold = 4500, quote = '', summary = '', reply = '', actions = [], onAction, onDismiss }) {
     if (this.current && (PRIORITY[this.current.kind] ?? 1) > (PRIORITY[kind] ?? 1) && this.current.hold === null) {
       return null; // an alert stays up until it's answered
     }
@@ -93,6 +95,20 @@ export class Panel {
       r.appendChild(renderBlocks(parseMarkdown(reply), doc));
       body.appendChild(r);
     }
+    if (actions.length) {
+      const row = el(doc, 'div', 'hx-actions');
+      for (const a of actions) {
+        const b = el(doc, 'button', a.primary ? 'hx-button hx-button--primary' : 'hx-button', a.label);
+        b.type = 'button';
+        b.addEventListener('click', (e) => {
+          e.stopPropagation(); // a button isn't also a click to close the panel
+          this.hide({ answered: true });
+          onAction?.(a.id);
+        });
+        row.appendChild(b);
+      }
+      body.appendChild(row);
+    }
     card.append(portrait, body);
     card.addEventListener('click', () => {
       this.hide();
@@ -101,7 +117,7 @@ export class Panel {
     this.root.appendChild(card);
 
     const id = this.nextId++;
-    this.current = { id, kind, line: String(line), shown: 0, card, lineEl, portrait, face, glitchUntil: this.now() + 90, start: this.now(), hold, doneAt: null };
+    this.current = { id, kind, line: String(line), shown: 0, card, lineEl, portrait, face, glitchUntil: this.now() + 90, start: this.now(), hold, doneAt: null, onDismiss };
     this.drawFace();
     this.place();
     return id;
@@ -111,10 +127,12 @@ export class Panel {
     if (this.current?.kind === kind) this.hide();
   }
 
-  hide() {
-    if (!this.current) return;
-    this.current.card.remove();
+  hide({ answered = false } = {}) {
+    const c = this.current;
+    if (!c) return;
+    c.card.remove();
     this.current = null;
+    if (!answered) c.onDismiss?.();
   }
 
   setFace(face) {

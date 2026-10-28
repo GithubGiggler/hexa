@@ -137,6 +137,26 @@ html, body {
 .hx-reply ul, .hx-reply ol { margin: 0 0 0.5em; padding-left: 1.3em; }
 .hx-link { color: var(--cyan); text-decoration: underline dotted; }
 
+.hx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.hx-button {
+  font: 600 12px 'Chakra Petch', system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  color: var(--white);
+  background: rgba(62, 242, 255, 0.08);
+  border: 1px solid var(--edge);
+  padding: 4px 10px;
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+}
+.hx-button:hover { background: rgba(62, 242, 255, 0.2); }
+.hx-button--primary { background: var(--edge); color: var(--navy); }
+.hx-button--primary:hover { filter: brightness(1.1); }
+
 /* ---- the ticker over her head ---- */
 
 .hx-ticker {

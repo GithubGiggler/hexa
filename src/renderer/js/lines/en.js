@@ -20,6 +20,32 @@ export const VERBS = {
   default: 'USES',
 };
 
+// Her guide: what she says while she shows you around (guide.js). One line each, her voice.
+export const GUIDE = {
+  welcomeHi: 'Hi. I\'m Hexa. I live in your machine now.',
+  welcomeWhat: 'I watch Claude Code work and tell you what it\'s up to. Plug me in and I\'ll see everything it does.',
+  plugIn: 'Plug me in',
+  justHang: 'Just keep me company',
+  connected: 'Plugged in.',
+  restart: 'Restart your Claude Code sessions: they read their hooks when they start. Then I\'ll see Claude the moment it does something.',
+  hooksFailed: 'I couldn\'t plug in: {error}',
+  menuLine: 'What do you want to see?',
+  topics: {
+    connect: 'Plug me into Claude',
+    claude: 'Where\'s Claude?',
+    folder: 'Claude\'s folder',
+    icon: 'Where\'s my icon?',
+    close: 'Nothing, thanks',
+  },
+  claudeHere: 'That\'s Claude\'s window: the one you typed your last prompt in.',
+  claudeUnknown: 'I haven\'t seen Claude yet. Send it a prompt and ask me again.',
+  folderLine: 'This is ~/.claude, where Claude Code keeps its settings. My hook lives in settings.json, under "hooks".',
+  folderHow: 'To take me out: my menu › Remove Claude Code hooks. A backup of settings.json sits right next to it.',
+  iconLine: 'My icon lives up here, in your panel. Right-click it, or me, for my menu.',
+  iconNone: 'Your panel isn\'t on this screen, so I can\'t show you my icon. Right-click me for my menu.',
+  ok: 'OK',
+};
+
 export const LINES = {
   boot: [
     'Booting. Hold your applause.',

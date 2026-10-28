@@ -11,6 +11,7 @@ const TRAY = {
     show: 'Bring her back',
     teleport: 'Teleport',
     demo: 'Play demo',
+    help: 'How does it work?',
     size: 'Size',
     small: 'Small',
     medium: 'Medium',

@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('host', {
   listSounds: () => ipcRenderer.invoke('sounds:list'),
   hooksStatus: () => ipcRenderer.invoke('hooks:status'),
   installHooks: () => ipcRenderer.invoke('hooks:install'),
+  openClaudeFolder: () => ipcRenderer.invoke('guide:claudeFolder'),
+  trayPlace: () => ipcRenderer.invoke('guide:tray'),
   // /debug/state (dev only): the main process asks, the renderer answers
   answerState: (fn) => ipcRenderer.on('debug:state', async (_e, id) => {
     ipcRenderer.send('debug:state', { id, state: await fn() });

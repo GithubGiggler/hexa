@@ -268,3 +268,13 @@ test("a permission prompt while you're on another window: she points at Claude's
   brain.handle(evt('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } }));
   assert.ok(calls.some((c) => c[0] === 'stopPointing'), 'lets go once answered');
 });
+
+test("claudeWindow is the window of the session you talked to last", () => {
+  const { brain, clock } = rig();
+  brain.onWindows({ fg: 55, wins: [{ id: 55, x: 0, y: 0, w: 500, h: 400 }, { id: 66, x: 600, y: 0, w: 500, h: 400 }] });
+  clock.set(0);
+  brain.handle(evt('UserPromptSubmit', { prompt: 'a', window_id: 55 }));
+  clock.set(1000);
+  brain.handle({ ...evt('UserPromptSubmit', { prompt: 'b', window_id: 66 }), session_id: 's2' });
+  assert.equal(brain.claudeWindow().id, 66);
+});

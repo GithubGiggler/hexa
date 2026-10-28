@@ -21,6 +21,7 @@ function buildMenu(state, t, act) {
     state.visible ? { label: t.hide, click: () => act.toggle() } : { label: t.show, click: () => act.toggle() },
     { label: t.teleport, enabled: Boolean(state.visible), click: () => act.teleport() },
     { label: t.demo, click: () => act.demo() },
+    { label: t.help, click: () => act.guide() },
     sep,
     {
       label: t.size,
