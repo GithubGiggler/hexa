@@ -21,7 +21,7 @@ function mockAudio() {
 }
 
 test('every sound she has is listed', () => {
-  assert.deepEqual(SOUNDS, ['boot', 'hello', 'teleport-out', 'teleport-in', 'done', 'alert', 'error', 'land', 'rise', 'bolt', 'charge', 'blip', 'tick']);
+  assert.deepEqual(SOUNDS, ['boot', 'hello', 'teleport-out', 'teleport-in', 'done', 'alert', 'error', 'land', 'rise', 'bolt', 'charge', 'blip', 'tick', 'possess']);
 });
 
 test('pickCustom maps known names, first one wins, ignores the rest', () => {

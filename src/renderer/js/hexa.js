@@ -24,6 +24,7 @@ const TELEPORT_GAP = 250;             // ms between vanishing and arriving
 const TELEPORT_WATCHDOG_MS = 2500;    // a teleport takes about 1 s; past this, she's put where she was going
 const SEAT_DY = 66;                   // from her hips down to her root, seated (thighs folded)
 const WANDER = [45000, 90000];
+const POSSESS_EVERY = [60000, 180000]; // sitting idle on a window, now and then she takes it over
 
 const BOOT_LOG = [
   '[ OK ] Mounted /dev/visor',
@@ -69,6 +70,7 @@ export class Hexa {
     this.zapRolled = false;
     this.lastZap = -Infinity;
     this.nextWander = now() + between(WANDER[0], WANDER[1], rand);
+    this.nextPossess = now() + between(POSSESS_EVERY[0], POSSESS_EVERY[1], rand);
     this.link = 0;
     this.emblemState = null;
     this.flashUntil = 0;
@@ -478,6 +480,77 @@ export class Hexa {
     });
   }
 
+  // ---- possessing a window (rules ported from upstream v0.4.3, her own look) ----
+
+  canPossess() {
+    if (this.settings.possess === false || this.reduced) return false;
+    if (!this.perch || BUSY.has(this.mode) || this.hidden) return false;
+    return this.windows.wins.some((w) => w.id === this.perch.id);
+  }
+
+  // She plugs into the window she sits on and dives in: it lights up, glitches and looks at you with
+  // her eyes (fx.possess), then she comes out of another window, or further along this one.
+  // Resolves true once she's out.
+  possess() {
+    if (!this.canPossess()) return Promise.resolve(false);
+    const id = this.perch.id;
+    const rect = () => this.windows.wins.find((w) => w.id === id) || null;
+    const covers = () => {
+      const front = [];
+      for (const o of this.windows.wins) {
+        if (o.id === id) break;
+        front.push(o);
+      }
+      return front;
+    };
+    const entry = this.pos.x - rect().x;
+    this.enterMode('teleport'); // inside the window: busy, not clickable
+    this.resumeMode = 'idle';
+    return new Promise((resolve) => {
+      const comeOut = () => {
+        const here = rect();
+        let seat = this.pickSeat({ except: id });
+        if (!seat && here && this.canSit(here)) {
+          const dx = Math.min(Math.max(here.w - entry + between(-60, 60, this.rand), 60), Math.max(60, here.w - 190));
+          if (!this.covered(here, here.x + dx)) seat = { win: here, dx }; // the other end of it
+        }
+        this.pos = seat ? this.seat(seat.win, seat.dx) : clampInto(this.area, nextDriftTarget(this.area, this.size, this.pos, this.rand), this.size);
+        this.resetChains();
+        this.hidden = false;
+        this.fx.column(this.pos.x, this.pos.y);
+        this.voice.play('teleport-in');
+        this.player.play('teleportIn', {
+          fast: true,
+          onEnd: () => {
+            this.resumeMode = null;
+            if (seat) this.perch = { id: seat.win.id, dx: seat.dx };
+            this.enterMode('idle');
+            resolve(true);
+          },
+        });
+      };
+      this.voice.play('teleport-out');
+      this.player.play('teleportOut', {
+        fast: true,
+        onCue: (c) => {
+          if (c !== 'shatter') return;
+          const b = this.body();
+          this.fx.shards(b.x, b.y, 18, { spread: 160 });
+        },
+        onEnd: () => {
+          this.hidden = true;
+          const taken = this.fx.possess(rect, { covers, look: () => this.pointer, glyphs: this.rig.glyphs });
+          this.voice.play('bolt');
+          this.later(300, () => this.voice.play('possess'));
+          this.later(1900, () => {
+            taken.leave();
+            this.later(260, comeOut);
+          });
+        },
+      });
+    });
+  }
+
   peek() {
     const spots = peekSpots(this.area, this.size);
     const others = spots.filter((s) => s.side !== this.peekSpot?.side);
@@ -749,6 +822,11 @@ export class Hexa {
         if (this.rand() < 1 / 3) this.teleport(t);
         else this.target = t;
       }
+    }
+
+    if (this.mode === 'idle' && this.perch && now >= this.nextPossess && !this.player.playing) {
+      this.nextPossess = now + between(POSSESS_EVERY[0], POSSESS_EVERY[1], this.rand);
+      if (this.rand() < 0.5) this.possess();
     }
 
     if (this.mode === 'work' && this.rand() < h * 0.8) {

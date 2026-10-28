@@ -20,6 +20,51 @@ function hexPath(ctx, x, y, r, rot = 0) {
 
 const easeIn = (t) => t * t * t;
 
+// The parts of rect not covered by any of covers (rects { x, y, w, h }): what of a window you can
+// actually see, so possessing it never draws over the windows in front of it.
+export function visibleParts(rect, covers) {
+  let parts = [{ ...rect }];
+  for (const c of covers) {
+    const next = [];
+    for (const p of parts) {
+      const x0 = Math.max(p.x, c.x);
+      const y0 = Math.max(p.y, c.y);
+      const x1 = Math.min(p.x + p.w, c.x + c.w);
+      const y1 = Math.min(p.y + p.h, c.y + c.h);
+      if (x1 <= x0 || y1 <= y0) {
+        next.push(p);
+        continue;
+      }
+      if (y0 > p.y) next.push({ x: p.x, y: p.y, w: p.w, h: y0 - p.y });                     // above
+      if (y1 < p.y + p.h) next.push({ x: p.x, y: y1, w: p.w, h: p.y + p.h - y1 });           // below
+      if (x0 > p.x) next.push({ x: p.x, y: y0, w: x0 - p.x, h: y1 - y0 });                   // left
+      if (x1 < p.x + p.w) next.push({ x: x1, y: y0, w: p.x + p.w - x1, h: y1 - y0 });        // right
+    }
+    parts = next;
+  }
+  return parts.filter((p) => p.w > 0 && p.h > 0);
+}
+
+// Her visor eyes as dot matrices, the way glyphs.js draws them (kept here: fx draws in display
+// space, with its own glow).
+function drawEyes(ctx, eyes, x, y, w, h, color) {
+  const half = w / 2;
+  const pitch = Math.min(half, h) / 5;
+  ctx.fillStyle = color;
+  eyes.forEach((rows, eye) => {
+    const ox = x + eye * half + (half - pitch * 5) / 2;
+    const oy = y + (h - pitch * 5) / 2;
+    rows.forEach((row, ry) => {
+      for (let cx = 0; cx < 5; cx++) {
+        if (row[cx] !== '#') continue;
+        ctx.beginPath();
+        ctx.arc(ox + (cx + 0.5) * pitch, oy + (ry + 0.5) * pitch, pitch * 0.38, 0, TAU);
+        ctx.fill();
+      }
+    });
+  });
+}
+
 export class Fx {
   constructor({ palette, rand = Math.random, cap = 600 }) {
     this.palette = palette;
@@ -148,6 +193,111 @@ export class Fx {
     return this.impactState && this.impactState.life > 0 ? this.impactState.kind : null;
   }
 
+  // Possessing a window: its frame lights up, a hex grid sweeps it, slices glitch, and it looks at
+  // you with her visor across it, more of her eyes opening all over it, every one on your pointer.
+  // rect() and covers() are asked every frame, so it follows the window; nothing is drawn over the
+  // windows in front of it, and the window's contents are never read. Returns { leave }.
+  possess(rect, { covers = () => [], look = () => null, glyphs } = {}) {
+    const e = { kind: 'possess', rect, covers, look, glyphs, t: 0, life: Infinity, max: Infinity, eyes: [], clock: 0, slices: [] };
+    for (let i = 0; i < 9; i++) e.eyes.push({ u: this.r(0.08, 0.92), v: this.r(0.12, 0.9), at: 0.25 + i * 0.12, s: this.r(0.6, 1.2) });
+    this.effects.push(e);
+    return {
+      leave: () => {
+        if (e.life === Infinity) {
+          e.life = 0.3;
+          e.max = 0.3;
+        }
+      },
+    };
+  }
+
+  drawPossess(ctx, e) {
+    const r = e.rect();
+    if (!r) return;
+    const { cyan, magenta, amber, white, visor } = this.palette;
+    const k = e.life === Infinity ? 1 : Math.max(0, e.life / e.max);
+    ctx.save();
+    ctx.globalAlpha = k;
+    // the frame, crackling
+    ctx.shadowColor = cyan;
+    ctx.shadowBlur = 14;
+    ctx.strokeStyle = cyan;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.shadowBlur = 0;
+    // everything else only on the parts of the window you can see
+    ctx.beginPath();
+    for (const p of visibleParts(r, e.covers())) ctx.rect(p.x, p.y, p.w, p.h);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(20, 26, 46, 0.35)';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    // the hex grid sweeping down
+    const sweep = r.y + ((e.t * 0.9) % 1) * r.h;
+    ctx.strokeStyle = cyan;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.35 * k;
+    const cell = 28;
+    for (let gy = r.y; gy < sweep; gy += cell * 0.866) {
+      const row = Math.round((gy - r.y) / (cell * 0.866));
+      for (let gx = r.x + (row % 2) * cell * 0.75; gx < r.x + r.w; gx += cell * 1.5) {
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i * TAU) / 6;
+          const px = gx + Math.cos(a) * cell * 0.5;
+          const py = gy + Math.sin(a) * cell * 0.5;
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 0.9 * k;
+    ctx.fillStyle = white;
+    ctx.fillRect(r.x, sweep - 1, r.w, 2);
+    // glitched slices
+    for (const sl of e.slices) {
+      ctx.globalAlpha = 0.28 * k;
+      ctx.fillStyle = sl.c ? magenta : cyan;
+      ctx.fillRect(r.x + sl.dx, r.y + sl.y * r.h, r.w, sl.h * r.h);
+    }
+    // her visor, huge, laughing across it
+    const vw = Math.min(r.w * 0.7, 560);
+    const vh = vw / 3.6;
+    const vx = r.x + (r.w - vw) / 2;
+    const vy = r.y + r.h * 0.46 - vh / 2;
+    ctx.globalAlpha = 0.92 * k;
+    ctx.fillStyle = visor;
+    ctx.fillRect(vx, vy, vw, vh);
+    ctx.strokeStyle = amber;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(vx, vy, vw, vh);
+    if (e.glyphs?.laugh) drawEyes(ctx, e.glyphs.laugh, vx + vw * 0.08, vy + vh * 0.12, vw * 0.84, vh * 0.76, amber);
+    // more of her eyes opening all over it, every one on your pointer
+    const at = e.look();
+    for (const eye of e.eyes) {
+      if (e.t < eye.at) continue;
+      const ex = r.x + eye.u * r.w;
+      const ey = r.y + eye.v * r.h;
+      const size = 16 * eye.s;
+      ctx.globalAlpha = Math.min(1, (e.t - eye.at) * 4) * k;
+      ctx.fillStyle = visor;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, size * 1.4, size, 0, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = amber;
+      ctx.stroke();
+      const ang = at ? Math.atan2(at.y - ey, at.x - ex) : 0;
+      ctx.fillStyle = amber;
+      ctx.shadowColor = amber;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(ex + Math.cos(ang) * size * 0.6, ey + Math.sin(ang) * size * 0.45, size * 0.35, 0, TAU);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+  }
+
   glitch(ms, strength = 1) {
     this.glitchState = { life: ms / 1000, strength };
   }
@@ -178,6 +328,14 @@ export class Fx {
     this.particles = this.particles.filter((p) => p.life > 0);
 
     for (const e of this.effects) {
+      if (e.kind === 'possess') {
+        e.t += h;
+        e.clock += h;
+        if (e.clock >= DRAWING || !e.slices.length) {
+          e.clock = 0;
+          e.slices = Array.from({ length: 4 }, () => ({ y: this.rand(), h: this.r(0.01, 0.05), dx: this.r(-24, 24), c: this.rand() < 0.5 }));
+        }
+      }
       e.life -= h;
       if (e.kind === 'bolt' || e.kind === 'speed') {
         e.clock += h;
@@ -263,6 +421,8 @@ export class Fx {
         ctx.lineWidth = e.width * 0.7;
         this.polyline(ctx, e.points);
         ctx.stroke();
+      } else if (e.kind === 'possess') {
+        this.drawPossess(ctx, e);
       } else if (e.kind === 'flash') {
         const tone = e.tone === 'red' ? red : e.tone === 'ink' ? navy : white;
         const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, 240);

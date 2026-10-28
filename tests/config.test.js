@@ -50,7 +50,7 @@ test('save is atomic: no temp file left behind', () => {
 
 test('defaults are the M1 set', () => {
   assert.deepEqual(config.DEFAULTS, {
-    configVersion: 1, scale: 1, muted: false, volume: 0.7, lang: 'auto', displayId: null, wander: true,
+    configVersion: 1, scale: 1, muted: false, volume: 0.7, lang: 'auto', displayId: null, wander: true, possess: true,
     visible: true, welcomed: false, linked: false, claude: true, motion: 'auto', shortcut: 'Ctrl+Alt+H',
     startAtLogin: false, tcp: false,
   });

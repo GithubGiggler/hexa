@@ -101,7 +101,7 @@ function start() {
 
   function trayState() {
     const cfg = config.load();
-    return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, startAtLogin: autostart.isEnabled(), hooks: claudeHooks.status(), status: trayStatus };
+    return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, possess: cfg.possess, startAtLogin: autostart.isEnabled(), hooks: claudeHooks.status(), status: trayStatus };
   }
 
   const actions = {
@@ -124,6 +124,7 @@ function start() {
       shell.openPath(dir);
     },
     wander: (wander) => updateConfig({ wander }),
+    possess: (possess) => updateConfig({ possess }),
     startup: (on) => {
       if (on) autostart.enable({ exec: process.env.APPIMAGE || process.execPath, args: app.isPackaged ? [] : [appDir] });
       else autostart.disable();

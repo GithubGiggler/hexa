@@ -5,7 +5,7 @@
 
 const SIZES = [['small', 0.8], ['medium', 1], ['large', 1.25]];
 
-// state: { visible, scale, muted, wander, startAtLogin, hooks: { installed, error? }, status? }
+// state: { visible, scale, muted, wander, possess, startAtLogin, hooks: { installed, error? }, status? }
 // act: callbacks named after what they do
 function buildMenu(state, t, act) {
   const sep = { type: 'separator' };
@@ -36,6 +36,7 @@ function buildMenu(state, t, act) {
       ],
     },
     { label: t.wander, type: 'checkbox', checked: Boolean(state.wander), click: () => act.wander(!state.wander) },
+    { label: t.possess, type: 'checkbox', checked: state.possess !== false, click: () => act.possess(state.possess === false) },
     { label: t.startup, type: 'checkbox', checked: Boolean(state.startAtLogin), click: () => act.startup(!state.startAtLogin) },
     sep,
     ...hookItems,

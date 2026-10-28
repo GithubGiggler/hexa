@@ -19,6 +19,7 @@ const TRAY = {
     mute: 'Mute',
     soundsDir: 'Open custom sounds folder',
     wander: 'Wander around when idle',
+    possess: 'Possess my windows',
     startup: 'Start at login',
     hooksOn: 'Claude Code hooks: installed',
     hooksOff: 'Install Claude Code hooks',

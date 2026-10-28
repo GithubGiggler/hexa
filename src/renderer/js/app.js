@@ -40,7 +40,7 @@ const startArea = await host.getArea();
 let area = { x: startArea.x, y: startArea.y, w: startArea.w, h: startArea.h };
 const hexa = new Hexa({
   rig, player, fx, voice, area, scale: cfg.scale, now: () => performance.now(),
-  settings: { wander: cfg.wander, motion: cfg.motion, reducedMotion: cfg.reducedMotion },
+  settings: { wander: cfg.wander, possess: cfg.possess, motion: cfg.motion, reducedMotion: cfg.reducedMotion },
 });
 const panel = new Panel({ root: ui, voice, glyphs: pack.glyphs, palette: pack.palette });
 const brain = new Brain({ hexa, panel, voice, lang: cfg.lang || 'en' });
@@ -100,7 +100,7 @@ host.onConfig((c) => {
   voice.setMuted(c.muted);
   voice.setVolume(c.volume);
   hexa.setScale(c.scale);
-  hexa.setSettings({ wander: c.wander, motion: c.motion, reducedMotion: c.reducedMotion });
+  hexa.setSettings({ wander: c.wander, possess: c.possess, motion: c.motion, reducedMotion: c.reducedMotion });
   brain.watching = c.claude;
 });
 

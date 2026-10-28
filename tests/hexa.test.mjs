@@ -15,7 +15,8 @@ function make(settings = {}) {
   const play = player.play.bind(player);
   player.play = (name, opts) => { played.push(name); return play(name, opts); };
   const fxCalls = [];
-  const fx = new Proxy({ impactKind: () => null, glitching: () => 0 }, { get: (o, k) => (k in o ? o[k] : (...a) => fxCalls.push([k, ...a])) });
+  // records every effect asked for; possess hands back its { leave } like the real Fx does
+  const fx = new Proxy({ impactKind: () => null, glitching: () => 0 }, { get: (o, k) => (k in o ? o[k] : (...a) => { fxCalls.push([k, ...a]); return k === 'possess' ? { leave() {} } : undefined; }) });
   const sounds = [];
   const said = [];
   const h = new Hexa({
@@ -355,4 +356,36 @@ test('pickSeat prefers the window in front and skips covered spots', () => {
   assert.equal(h.pickSeat().win.id, 5);
   assert.equal(h.pickSeat({ except: 5 })?.win.id ?? null, null, 'window 7 is covered by window 5 around its top edge, or too low');
   assert.equal(h.pickSeat({ frontOnly: true }).win.id, 5);
+});
+
+// ---- possession (M2) ----
+
+test('possess: she dives into the window she sits on, takes it over, and comes out perched', async () => {
+  const { h, fxCalls, sounds, advance } = make();
+  const other = { id: 8, x: 1500, y: 500, w: 800, h: 600, max: false };
+  h.setWindows({ fg: 5, wins: [konsole(), other] });
+  h.goToWork();
+  advance(1.5);
+  h.setMode('idle');
+  assert.equal(h.canPossess(), true);
+  const done = h.possess();
+  advance(4);
+  assert.equal(await done, true);
+  assert.ok(fxCalls.some((c) => c[0] === 'possess'));
+  assert.ok(sounds.includes('possess'));
+  assert.ok(h.perch, 'she comes out sitting on a window');
+  assert.equal(h.hidden, false);
+});
+
+test('possess is off when she is not sitting, the setting is off, or motion is reduced', () => {
+  const standing = make();
+  standing.h.setWindows({ fg: 5, wins: [konsole()] });
+  assert.equal(standing.h.canPossess(), false, 'not sitting');
+  for (const settings of [{ possess: false }, { motion: 'reduced' }]) {
+    const { h, advance } = make(settings);
+    h.setWindows({ fg: 5, wins: [konsole()] });
+    h.goToWork();
+    advance(1.5);
+    assert.equal(h.canPossess(), false, JSON.stringify(settings));
+  }
 });

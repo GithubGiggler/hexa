@@ -15,6 +15,7 @@ const DEFAULTS = {
   lang: 'auto',        // 'auto' follows LANG
   displayId: null,     // null: the primary display
   wander: true,        // she drifts around when nothing's going on
+  possess: true,       // now and then she dives into the window she sits on and takes it over
   visible: true,       // false: she's in the background (just her core)
   welcomed: false,     // she has introduced herself
   linked: false,       // a real Claude Code event has reached her at least once

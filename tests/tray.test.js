@@ -37,6 +37,16 @@ test('background toggle and checkboxes follow the state; quit is last', () => {
   assert.equal(menu.at(-1).label, t.quit);
 });
 
+test('possess my windows follows the config and toggles', () => {
+  const hit = [];
+  const act = new Proxy({}, { get: (_, k) => (v) => hit.push([k, v]) });
+  const on = buildMenu({ ...base, possess: true }, t, act);
+  assert.equal(find(on, t.possess).checked, true);
+  find(on, t.possess).click();
+  assert.deepEqual(hit.at(-1), ['possess', false]);
+  assert.equal(find(buildMenu({ ...base, possess: false }, t, act), t.possess).checked, false);
+});
+
 test('the status line comes first and is not clickable', () => {
   const menu = buildMenu({ ...base, status: 'Transparency needs a compositor' }, t, noop);
   assert.equal(menu[0].label, 'Transparency needs a compositor');

@@ -3,7 +3,7 @@
 // Her sounds, synthesised live with Web Audio: nothing recorded ships with her. A file of your
 // own in ~/.local/share/hexa/sounds/ named after a sound (done.ogg, alert.wav...) replaces it.
 
-export const SOUNDS = ['boot', 'hello', 'teleport-out', 'teleport-in', 'done', 'alert', 'error', 'land', 'rise', 'bolt', 'charge', 'blip', 'tick'];
+export const SOUNDS = ['boot', 'hello', 'teleport-out', 'teleport-in', 'done', 'alert', 'error', 'land', 'rise', 'bolt', 'charge', 'blip', 'tick', 'possess'];
 
 const EXTENSIONS = /\.(mp3|wav|ogg|m4a)$/i;
 const BLIP_GAP_MS = 45;
@@ -208,9 +208,15 @@ export class Voice {
   tick(t) {
     this.osc('sine', 2000, t, 0.012, 0.08);
   }
+
+  // the window she took over laughs: glitchy chirps tumbling down, under a wash of static
+  possess(t) {
+    [[88, 0], [84, 0.09], [86, 0.18], [81, 0.27], [83, 0.36], [77, 0.45]].forEach(([n, d]) => this.osc('square', midi(n), t + d, 0.07, 0.09));
+    this.noiseBurst(t, 0.6, 0.06, 4000, 900, 1.2);
+  }
 }
 
 const SYNTH = {
   boot: 'boot', hello: 'hello', 'teleport-out': 'teleportOut', 'teleport-in': 'teleportIn', done: 'done', alert: 'alert',
-  error: 'error', land: 'land', rise: 'rise', bolt: 'bolt', charge: 'charge', blip: 'blip', tick: 'tick',
+  error: 'error', land: 'land', rise: 'rise', bolt: 'bolt', charge: 'charge', blip: 'blip', tick: 'tick', possess: 'possess',
 };
