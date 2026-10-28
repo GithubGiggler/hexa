@@ -1,0 +1,68 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Hexa contact sheet</title>
+<style>
+  html, body { margin: 0; background: #0b0f1c; overflow: hidden; }
+  canvas { display: block; }
+</style>
+<canvas id="c"></canvas>
+<script type="module">
+  // Dev only: Hexa in her key poses, her visor glyphs and her core, to check how she looks.
+  import { buildRig, solvePose } from '../js/character/rig.js';
+  import { drawCharacter, drawCore, makeChains, anchorFor } from '../js/character/draw.js';
+  import { drawGlyph, GLYPH_NAMES } from '../js/character/glyphs.js';
+  import { NEUTRAL } from '../js/character/acting.js';
+
+  const pack = await (await fetch('hexa://app/packs/hexa/pack.json')).json();
+  const rig = buildRig(pack);
+  const canvas = document.getElementById('c');
+  const W = innerWidth; const H = innerHeight;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.font = '13px monospace';
+
+  const poses = [
+    ['stand', {}, 'calm', '#3ef2ff'],
+    ['wave', { armR: 2.5, elbowR: 0.9, head: -0.12 }, 'laugh', '#3ef2ff'],
+    ['zap', { armR: 1.57, longR: 1.7, head: 0.1, tilt: -4 }, 'smug', '#3ef2ff'],
+    ['sit', { fold: 1, kickL: 0.25, kickR: 0.1, armL: 0.35, armR: 0.35, bob: -20 }, 'calm', '#3ef2ff'],
+    ['sleep', { head: 0.3, tilt: 6, bob: 6, armL: -0.08, armR: -0.08 }, 'sleepy', '#ffb43a'],
+    ['dragged', { armL: 2.8, armR: 2.8, kickL: 0.3, kickR: -0.2, bristle: 1 }, 'wide', '#ff3ea5'],
+    ['exit 0', { armL: 2.6, armR: 2.6, elbowL: -0.4, elbowR: -0.4, sy: 1.05 }, 'laugh', '#4dff9a'],
+    ['peek', { tilt: -22, head: -0.25, armL: 0.5 }, 'ask', '#3ef2ff'],
+    ['segfault', { tilt: 18, head: -0.4, armL: 0.9, armR: 0.5 }, 'dead', '#ff4d4d'],
+  ];
+
+  const cellW = W / 5;
+  poses.forEach(([label, extra, visor, emblem], i) => {
+    const col = i % 5; const row = Math.floor(i / 5);
+    const x = cellW * col + cellW / 2; const y = 330 + row * 330;
+    const pose = { ...NEUTRAL, ...extra };
+    const at = { x, y, scale: 1, dir: 1 };
+    const xf = solvePose(rig, pose, at);
+    const chains = makeChains(rig);
+    const lift = (pose.bristle || 0) * 1400;
+    for (let k = 0; k < 120; k++) for (const def of rig.chains) chains.get(def.id).step(anchorFor(rig, xf, def), 1 / 60, 0, def.id === 'cable' ? 0 : lift);
+    drawCharacter(ctx, rig, xf, chains, pose, { visor, emblem, link: i % 2, boil: i });
+    ctx.fillStyle = '#8a95b8';
+    ctx.fillText(label, x - ctx.measureText(label).width / 2, y + 40);
+  });
+
+  // her core, in the last cell
+  drawCore(ctx, cellW * 4 + cellW / 2, 330 + 330 - 120, 64, { visor: pack.glyphs.sleepy, emblem: '#3ef2ff', palette: pack.palette });
+  ctx.fillStyle = '#8a95b8';
+  ctx.fillText('core', cellW * 4 + cellW / 2 - 14, 330 + 330 + 40);
+
+  // the twelve visor glyphs, big
+  GLYPH_NAMES.forEach((name, i) => {
+    const x = 40 + (i % 12) * ((W - 80) / 12);
+    const y = H - 150;
+    ctx.fillStyle = pack.palette.visor;
+    ctx.fillRect(x, y, 110, 46);
+    drawGlyph(ctx, pack.glyphs[name], [x + 6, y + 6, 98, 34], pack.palette.amber);
+    ctx.fillStyle = '#8a95b8';
+    ctx.fillText(name, x, y + 66);
+  });
+
+  document.title = 'ready';
+</script>
