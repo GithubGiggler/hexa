@@ -1,0 +1,96 @@
+{
+  "id": "hexa",
+  "name": "Hexa",
+  "version": 1,
+  "height": 252,
+  "palette": {
+    "navy": "#141a2e",
+    "navy2": "#0b1020",
+    "navyLight": "#26304f",
+    "cyan": "#3ef2ff",
+    "hairDeep": "#127a8c",
+    "amber": "#ffb43a",
+    "visor": "#2b1904",
+    "magenta": "#ff3ea5",
+    "white": "#f4f7ff",
+    "skin": "#e3ebff",
+    "red": "#ff4d4d",
+    "green": "#4dff9a"
+  },
+  "bones": [
+    { "id": "root", "parent": null, "x": 0, "y": 0 },
+    { "id": "hips", "parent": "root", "x": 0, "y": -70 },
+    { "id": "spine", "parent": "hips", "x": 0, "y": -38 },
+    { "id": "neck", "parent": "spine", "x": 0, "y": -34 },
+    { "id": "head", "parent": "neck", "x": 0, "y": -30, "pose": "head" },
+    { "id": "upperL", "parent": "spine", "x": -22, "y": -34, "len": 30, "pose": "armL" },
+    { "id": "foreL", "parent": "upperL", "x": 0, "y": 30, "len": 28, "pose": "elbowL", "stretch": "longL" },
+    { "id": "handL", "parent": "foreL", "x": 0, "y": 28, "len": 12 },
+    { "id": "upperR", "parent": "spine", "x": 22, "y": -34, "len": 30, "pose": "armR", "sign": -1 },
+    { "id": "foreR", "parent": "upperR", "x": 0, "y": 30, "len": 28, "pose": "elbowR", "sign": -1, "stretch": "longR" },
+    { "id": "handR", "parent": "foreR", "x": 0, "y": 28, "len": 12 },
+    { "id": "thighL", "parent": "hips", "x": -12, "y": 0, "len": 34, "fold": true },
+    { "id": "shinL", "parent": "thighL", "x": 0, "y": 34, "len": 32, "pose": "kickL" },
+    { "id": "footL", "parent": "shinL", "x": 0, "y": 32, "len": 10 },
+    { "id": "thighR", "parent": "hips", "x": 12, "y": 0, "len": 34, "fold": true },
+    { "id": "shinR", "parent": "thighR", "x": 0, "y": 34, "len": 32, "pose": "kickR", "sign": -1 },
+    { "id": "footR", "parent": "shinR", "x": 0, "y": 32, "len": 10 }
+  ],
+  "parts": [
+    { "id": "hairBack", "bone": "head", "z": 1, "fill": "hairDeep", "path": "M -42 -40 C -44 -64 -24 -78 0 -78 C 24 -78 44 -64 42 -40 L 44 -8 C 30 -2 -30 -2 -44 -8 Z" },
+
+    { "id": "thighR", "bone": "thighR", "z": 2, "fill": "navy2", "stroke": "navyLight", "width": 1, "path": "M -7 0 C -7 -2 7 -2 7 0 L 6 34 L -6 34 Z" },
+    { "id": "shinR", "bone": "shinR", "z": 2.1, "fill": "navy2", "stroke": "navyLight", "width": 1, "path": "M -6 0 L 6 0 L 5 30 L -5 30 Z" },
+    { "id": "footR", "bone": "footR", "z": 2.2, "fill": "navyLight", "stroke": "cyan", "width": 1.2, "path": "M -7 -4 L 7 -4 L 8 6 C 8 10 -8 10 -8 6 Z" },
+    { "id": "thighL", "bone": "thighL", "z": 2, "fill": "navy2", "stroke": "navyLight", "width": 1, "path": "M -7 0 C -7 -2 7 -2 7 0 L 6 34 L -6 34 Z" },
+    { "id": "shinL", "bone": "shinL", "z": 2.1, "fill": "navy2", "stroke": "navyLight", "width": 1, "path": "M -6 0 L 6 0 L 5 30 L -5 30 Z" },
+    { "id": "footL", "bone": "footL", "z": 2.2, "fill": "navyLight", "stroke": "cyan", "width": 1.2, "path": "M -7 -4 L 7 -4 L 8 6 C 8 10 -8 10 -8 6 Z" },
+
+    { "id": "torso", "bone": "spine", "z": 4, "fill": "navy", "stroke": "cyan", "width": 1.4, "path": "M -20 -38 C -30 -36 -33 -22 -31 -2 L -33 32 C -22 39 22 39 33 32 L 31 -2 C 33 -22 30 -36 20 -38 Z" },
+    { "id": "zip", "bone": "spine", "z": 4.1, "stroke": "navyLight", "width": 1.6, "path": "M 0 -30 L 0 35" },
+    { "id": "traces", "bone": "spine", "z": 4.2, "stroke": "cyan", "width": 1, "path": "M -24 6 L -16 6 L -12 12 L -12 26 M -27 18 L -21 18 L -19 22 M 24 6 L 16 6 L 12 12 L 12 26 M 27 18 L 21 18 L 19 22" },
+    { "id": "collar", "bone": "spine", "z": 4.3, "fill": "navyLight", "stroke": "cyan", "width": 1.2, "path": "M -26 -34 C -20 -50 20 -50 26 -34 C 16 -28 -16 -28 -26 -34 Z" },
+    { "id": "emblem", "bone": "spine", "z": 4.5, "role": "emblem", "fill": "emblem", "stroke": "white", "width": 1, "path": "M 0 -18 L 8.7 -13 L 8.7 -3 L 0 2 L -8.7 -3 L -8.7 -13 Z" },
+
+    { "id": "upperR", "bone": "upperR", "z": 5, "fill": "navy", "stroke": "cyan", "width": 1, "path": "M -7 -2 C -7 -7 7 -7 7 -2 L 6 30 L -6 30 Z" },
+    { "id": "foreR", "bone": "foreR", "z": 5.1, "fill": "navy", "stroke": "cyan", "width": 1, "path": "M -6 -1 L 6 -1 L 5.5 28 L -5.5 28 Z" },
+    { "id": "handR", "bone": "handR", "z": 5.2, "fill": "skin", "stroke": "navyLight", "width": 1, "path": "M -6 0 C -8 5 -6 12 0 13 C 6 12 8 5 6 0 Z" },
+
+    { "id": "head", "bone": "head", "z": 6, "fill": "skin", "stroke": "navyLight", "width": 1.2, "path": "M -38 -34 C -38 -57 -21 -71 0 -71 C 21 -71 38 -57 38 -34 C 38 -12 22 2 0 2 C -22 2 -38 -12 -38 -34 Z" },
+    { "id": "mouth", "bone": "head", "z": 6.5, "role": "mouth", "stroke": "navy2", "width": 1.6, "path": "M -5 -9 C -2 -6 2 -6 5 -9" },
+    { "id": "visor", "bone": "head", "z": 7, "role": "visor", "fill": "visor", "stroke": "amber", "width": 1.4, "path": "M -40 -46 C -20 -52 20 -52 40 -46 L 38 -22 C 20 -16 -20 -16 -38 -22 Z" },
+    { "id": "hairCap", "bone": "head", "z": 8, "fill": "hairDeep", "stroke": "cyan", "width": 1, "path": "M -41 -38 C -44 -66 -24 -80 0 -80 C 24 -80 44 -66 41 -38 C 36 -50 26 -55 14 -52 L 8 -46 L 2 -53 C -12 -56 -30 -54 -41 -38 Z" },
+    { "id": "earL", "bone": "head", "z": 9, "role": "earL", "fill": "navyLight", "stroke": "cyan", "width": 1.2, "path": "M -47.5 -30 C -47.5 -34 -44.5 -36.5 -41 -36.5 C -37.5 -36.5 -34.5 -34 -34.5 -30 C -34.5 -26 -37.5 -23.5 -41 -23.5 C -44.5 -23.5 -47.5 -26 -47.5 -30 Z" },
+    { "id": "earR", "bone": "head", "z": 9, "role": "earR", "fill": "navyLight", "stroke": "cyan", "width": 1.2, "path": "M 34.5 -30 C 34.5 -34 37.5 -36.5 41 -36.5 C 44.5 -36.5 47.5 -34 47.5 -30 C 47.5 -26 44.5 -23.5 41 -23.5 C 37.5 -23.5 34.5 -26 34.5 -30 Z" },
+
+    { "id": "upperL", "bone": "upperL", "z": 11, "fill": "navy", "stroke": "cyan", "width": 1, "path": "M -7 -2 C -7 -7 7 -7 7 -2 L 6 30 L -6 30 Z" },
+    { "id": "foreL", "bone": "foreL", "z": 11.1, "fill": "navy", "stroke": "cyan", "width": 1, "path": "M -6 -1 L 6 -1 L 5.5 28 L -5.5 28 Z" },
+    { "id": "handL", "bone": "handL", "z": 11.2, "fill": "skin", "stroke": "navyLight", "width": 1, "path": "M -6 0 C -8 5 -6 12 0 13 C 6 12 8 5 6 0 Z" }
+  ],
+  "chains": [
+    { "id": "cable", "bone": "spine", "x": -10, "y": -20, "angle": 0.9, "segments": 6, "length": 14, "width": [3.5, 3], "color": "navyLight", "tip": "cyan", "z": 0, "stiffness": 0.04, "damping": 0.94, "plug": true },
+    { "id": "hairB1", "bone": "head", "x": -38, "y": -46, "angle": 0.25, "segments": 4, "length": 13, "width": [7, 2.5], "color": "cyan", "tip": "white", "z": 1.5, "stiffness": 0.3, "damping": 0.9 },
+    { "id": "hairB2", "bone": "head", "x": -30, "y": -62, "angle": 0.45, "segments": 4, "length": 12, "width": [7, 2.5], "color": "cyan", "tip": "white", "z": 1.5, "stiffness": 0.3, "damping": 0.9 },
+    { "id": "hairB3", "bone": "head", "x": 30, "y": -62, "angle": -0.45, "segments": 4, "length": 12, "width": [7, 2.5], "color": "cyan", "tip": "white", "z": 1.5, "stiffness": 0.3, "damping": 0.9 },
+    { "id": "hairB4", "bone": "head", "x": 38, "y": -46, "angle": -0.25, "segments": 4, "length": 13, "width": [7, 2.5], "color": "cyan", "tip": "white", "z": 1.5, "stiffness": 0.3, "damping": 0.9 },
+    { "id": "hairF1", "bone": "head", "x": -40, "y": -40, "angle": 0.1, "segments": 4, "length": 12, "width": [6, 2], "color": "cyan", "tip": "white", "z": 8.5, "stiffness": 0.35, "damping": 0.9 },
+    { "id": "hairF2", "bone": "head", "x": 40, "y": -40, "angle": -0.1, "segments": 4, "length": 12, "width": [6, 2], "color": "cyan", "tip": "white", "z": 8.5, "stiffness": 0.35, "damping": 0.9 },
+    { "id": "hairF3", "bone": "head", "x": -18, "y": -54, "angle": 0.2, "segments": 3, "length": 7, "width": [5, 1.5], "color": "cyan", "tip": "white", "z": 8.5, "stiffness": 0.55, "damping": 0.88 },
+    { "id": "hairF4", "bone": "head", "x": 2, "y": -53, "angle": 0, "segments": 3, "length": 7, "width": [5, 1.5], "color": "cyan", "tip": "white", "z": 8.5, "stiffness": 0.55, "damping": 0.88 },
+    { "id": "hairF5", "bone": "head", "x": 20, "y": -54, "angle": -0.2, "segments": 3, "length": 7, "width": [5, 1.5], "color": "cyan", "tip": "white", "z": 8.5, "stiffness": 0.55, "damping": 0.88 }
+  ],
+  "glyphs": {
+    "calm":    [[".###.", "#####", "#####", "#####", ".###."], [".###.", "#####", "#####", "#####", ".###."]],
+    "smug":    [[".....", "#####", "#####", ".###.", "....."], [".....", "#####", "#####", ".###.", "....."]],
+    "wide":    [[".###.", "#...#", "#.#.#", "#...#", ".###."], [".###.", "#...#", "#.#.#", "#...#", ".###."]],
+    "laugh":   [["..#..", ".#.#.", "#...#", ".....", "....."], ["..#..", ".#.#.", "#...#", ".....", "....."]],
+    "squint":  [["#....", ".##..", "...##", ".##..", "#...."], ["....#", "..##.", "##...", "..##.", "....#"]],
+    "sleepy":  [[".....", ".....", "#...#", ".###.", "....."], [".....", ".....", "#...#", ".###.", "....."]],
+    "angry":   [["#....", ".##..", "..###", ".###.", "....."], ["....#", "..##.", "###..", ".###.", "....."]],
+    "dizzy":   [[".###.", "#...#", "#.###", "#....", ".####"], [".###.", "#...#", "###.#", "....#", "####."]],
+    "heart":   [[".#.#.", "#####", "#####", ".###.", "..#.."], [".#.#.", "#####", "#####", ".###.", "..#.."]],
+    "loading": [[".....", ".....", "#.#.#", ".....", "....."], [".....", ".....", "#.#.#", ".....", "....."]],
+    "ask":     [[".###.", "#...#", "..##.", ".....", "..#.."], [".###.", "#...#", "..##.", ".....", "..#.."]],
+    "dead":    [["#...#", ".#.#.", "..#..", ".#.#.", "#...#"], ["#...#", ".#.#.", "..#..", ".#.#.", "#...#"]]
+  }
+}

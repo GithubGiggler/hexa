@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hexa-desktop/hexa/packs/pack.schema.json",
+  "title": "Hexa character pack",
+  "description": "A character for Hexa: a skeleton, vector parts on its bones, verlet chains (hair, cables), a palette and visor glyphs. Validated at load time by src/renderer/js/character/pack.js. Coordinates are design pixels, y negative upward, relative to the parent bone.",
+  "type": "object",
+  "required": ["id", "name", "version", "height", "palette", "bones", "parts", "glyphs"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string" },
+    "version": { "const": 1 },
+    "height": { "type": "number", "exclusiveMinimum": 0, "description": "Design height in px at scale 1." },
+    "palette": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } },
+    "bones": {
+      "type": "array",
+      "minItems": 1,
+      "description": "In order: every bone's parent comes before it; the first bone is the root (parent null).",
+      "items": {
+        "type": "object",
+        "required": ["id", "parent", "x", "y"],
+        "properties": {
+          "id": { "type": "string" },
+          "parent": { "type": ["string", "null"] },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "len": { "type": "number" },
+          "pose": { "type": "string", "description": "Pose field (see acting.js NEUTRAL) that sets this bone's angle, in radians." },
+          "sign": { "enum": [1, -1], "description": "-1 mirrors the pose field, for the right side." },
+          "stretch": { "type": "string", "description": "Pose field that scales this bone along its length (children keep their size)." },
+          "fold": { "type": "boolean", "description": "Foreshortened by pose.fold (thighs toward the viewer when sitting)." }
+        }
+      }
+    },
+    "parts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "bone", "path", "z"],
+        "properties": {
+          "id": { "type": "string" },
+          "bone": { "type": "string" },
+          "path": { "type": "string", "description": "SVG path data in the bone's space, absolute M L C Q Z only." },
+          "fill": { "type": "string", "description": "A palette key, 'emblem' (her state colour) or 'none'." },
+          "stroke": { "type": "string", "description": "A palette key." },
+          "width": { "type": "number" },
+          "z": { "type": "number", "description": "Draw order, back to front." },
+          "role": { "enum": ["visor", "emblem", "earL", "earR", "mouth"], "description": "Parts the renderer draws extra things on." }
+        }
+      }
+    },
+    "chains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "bone", "x", "y", "segments", "length", "width", "color", "z"],
+        "properties": {
+          "id": { "type": "string" },
+          "bone": { "type": "string" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "angle": { "type": "number", "description": "Rest direction relative to the bone, radians; 0 hangs down." },
+          "segments": { "type": "integer", "minimum": 1, "maximum": 12 },
+          "length": { "type": "number", "exclusiveMinimum": 0 },
+          "width": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+          "color": { "type": "string" },
+          "tip": { "type": "string" },
+          "z": { "type": "number" },
+          "stiffness": { "type": "number" },
+          "damping": { "type": "number" },
+          "plug": { "type": "boolean", "description": "Draw a plug at the end (her cable)." }
+        }
+      }
+    },
+    "glyphs": {
+      "type": "object",
+      "description": "Visor expressions: two 5×5 grids (left eye, right eye) of '.' and '#'. Required: calm, smug, wide, laugh, squint, sleepy, angry, dizzy, heart, loading, ask, dead.",
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": { "type": "array", "minItems": 5, "maxItems": 5, "items": { "type": "string", "pattern": "^[.#]{5}$" } }
+      }
+    }
+  }
+}
