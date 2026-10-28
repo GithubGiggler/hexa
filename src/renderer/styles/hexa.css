@@ -1,0 +1,163 @@
+/* Hexa's overlay: a transparent page, her canvas, and her panel and ticker on top. */
+
+@font-face {
+  font-family: 'Chakra Petch';
+  font-weight: 500;
+  src: url('hexa://app/node_modules/@fontsource/chakra-petch/files/chakra-petch-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  font-weight: 600;
+  src: url('hexa://app/node_modules/@fontsource/chakra-petch/files/chakra-petch-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-weight: 400;
+  src: url('hexa://app/node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-weight: 600;
+  src: url('hexa://app/node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-600-normal.woff2') format('woff2');
+}
+
+:root {
+  --navy: #141a2e;
+  --navy-glass: rgba(20, 26, 46, 0.92);
+  --cyan: #3ef2ff;
+  --amber: #ffb43a;
+  --magenta: #ff3ea5;
+  --white: #f4f7ff;
+  --muted: #9aa6c8;
+  --red: #ff4d4d;
+  --green: #4dff9a;
+  --edge: var(--cyan);
+}
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  cursor: default;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  font-family: 'Chakra Petch', system-ui, sans-serif;
+  color: var(--white);
+}
+
+/* ---- the panel ---- */
+
+.hx-panel {
+  position: absolute;
+  display: flex;
+  gap: 12px;
+  width: max-content;
+  max-width: 440px;
+  padding: 12px 16px 12px 12px;
+  background: var(--navy-glass);
+  border: 1px solid var(--edge);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--edge) 40%, transparent), 4px 4px 0 rgba(255, 62, 165, 0.35);
+  /* a hex-cut corner, like her shards */
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  pointer-events: auto;
+  animation: hx-in 140ms steps(3, end);
+}
+.hx-panel--alert { --edge: var(--magenta); }
+.hx-panel--error { --edge: var(--red); }
+.hx-panel--done { --edge: var(--green); }
+.hx-panel--work, .hx-panel--info, .hx-panel--idle { --edge: var(--cyan); }
+
+@keyframes hx-in {
+  from { opacity: 0; transform: translateX(-6px) skewX(-6deg); }
+  to { opacity: 1; transform: none; }
+}
+
+.hx-portrait {
+  flex: none;
+  width: 96px;
+  height: 44px;
+  border: 1px solid var(--amber);
+}
+
+.hx-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hx-tag {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--edge);
+}
+
+.hx-line {
+  font-weight: 500;
+  font-size: 15px;
+  line-height: 1.35;
+  min-height: 1.35em;
+}
+
+.hx-quote, .hx-summary {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.hx-quote { color: var(--muted); max-height: 7.5em; overflow: hidden; }
+.hx-summary { color: var(--amber); }
+
+.hx-reply {
+  max-height: 50vh;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.hx-reply p { margin: 0 0 0.5em; }
+.hx-reply pre, .hx-reply code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.hx-reply pre { background: rgba(0, 0, 0, 0.35); padding: 6px 8px; overflow-x: auto; }
+.hx-reply ul, .hx-reply ol { margin: 0 0 0.5em; padding-left: 1.3em; }
+.hx-link { color: var(--cyan); text-decoration: underline dotted; }
+
+/* ---- the ticker over her head ---- */
+
+.hx-ticker {
+  position: absolute;
+  display: flex;
+  gap: 6px;
+  padding: 2px 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  white-space: nowrap;
+  background: rgba(11, 16, 32, 0.85);
+  border-left: 3px solid var(--tick, var(--cyan));
+  color: var(--white);
+  pointer-events: auto;
+}
+.hx-ticker-verb { font-weight: 600; color: var(--tick, var(--cyan)); }
+.hx-ticker--work { --tick: var(--cyan); }
+.hx-ticker--thinking { --tick: var(--amber); }
+.hx-ticker--waiting { --tick: var(--magenta); }
+.hx-ticker--error { --tick: var(--red); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hx-panel { animation: none; }
+}
