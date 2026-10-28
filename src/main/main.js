@@ -20,6 +20,7 @@ const claudeHooks = require('./hooks/claude');
 const { registerPrivileged, registerHexaProtocol } = require('./protocol');
 const { buildMenu, createTray } = require('./tray');
 const { trayLabels } = require('./labels');
+const { playDemo } = require('./demo');
 
 const DEV = process.argv.includes('--dev');
 const appDir = app.getAppPath();
@@ -64,6 +65,7 @@ function start() {
   let x11 = null;
   let reducedMotion = false;
   let trayStatus = null;
+  let stopDemo = null;
   const pendingState = new Map();
   let stateSeq = 0;
 
@@ -106,7 +108,10 @@ function start() {
       trayHandle?.rebuild();
     },
     teleport: () => send('hexa:command', { name: 'teleport' }),
-    demo: () => actions.playDemo?.(),
+    demo: () => {
+      stopDemo?.();
+      stopDemo = playDemo((evt) => send('hexa:event', evt));
+    },
     size: (scale) => updateConfig({ scale }),
     mute: (muted) => updateConfig({ muted }),
     soundsDir: () => {

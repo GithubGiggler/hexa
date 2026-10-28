@@ -510,6 +510,32 @@ export class Hexa {
     this.pos = clampInto(this.area, this.pos, this.size);
   }
 
+  // ---- for the demo: her tricks on cue ----
+
+  // lifted up a good way and let go
+  drop() {
+    if (BUSY.has(this.mode) || this.mode === 'sleep' || this.mode === 'suspend') return;
+    this.target = null;
+    this.pos = clampInto(this.area, { x: this.pos.x, y: this.area.y + this.area.h * 0.25 }, this.size);
+    this.resetChains();
+    this.vy = 0;
+    this.enterMode('fall');
+  }
+
+  sleepNow() {
+    if (BUSY.has(this.mode)) return;
+    this.enterMode('sleep');
+    this.player.play('yawn');
+    this.say('sleepy');
+  }
+
+  suspendNow() {
+    if (BUSY.has(this.mode)) return;
+    this.enterMode('suspend');
+    this.folding = true;
+    this.player.play('suspend', { onEnd: () => { this.folding = false; } });
+  }
+
   // ---- her boot ----
 
   boot() {

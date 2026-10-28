@@ -253,3 +253,24 @@ test('arriving from a teleport drops effects left far behind', () => {
   advance(1.5);
   assert.ok(fxCalls.some((c) => c[0] === 'dropFar'));
 });
+
+test('drop() lifts her up and lets her fall onto the floor', () => {
+  const { h, advance } = make();
+  h.drop();
+  assert.equal(h.mode, 'fall');
+  assert.ok(h.pos.y < floor - 200);
+  advance(3);
+  assert.equal(h.pos.y, floor);
+  assert.equal(h.mode, 'idle');
+});
+
+test('sleepNow() and suspendNow() skip the waiting (for the demo)', () => {
+  const { h, advance } = make();
+  h.sleepNow();
+  advance(0.1);
+  assert.equal(h.mode, 'sleep');
+  h.suspendNow();
+  advance(2);
+  assert.equal(h.mode, 'suspend');
+  assert.equal(h.hitRects().length, 1, 'just her core');
+});
