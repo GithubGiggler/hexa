@@ -60,22 +60,9 @@ function chooseDisplay(displays, wantedId, primaryId) {
   return displays.find((d) => d.id === wantedId) || displays.find((d) => d.id === primaryId) || displays[0];
 }
 
-// Rects in display coordinates → relative to her window (the viewport [x, y, w, h]), clipped to it.
-function toWindowRects(rects, [vx, vy, vw, vh]) {
-  const out = [];
-  for (const [x, y, w, h] of rects) {
-    const x0 = Math.max(x, vx);
-    const y0 = Math.max(y, vy);
-    const x1 = Math.min(x + w, vx + vw);
-    const y1 = Math.min(y + h, vy + vh);
-    if (x1 > x0 && y1 > y0) out.push([x0 - vx, y0 - vy, x1 - x0, y1 - y0]);
-  }
-  return out;
-}
-
 function rectsEqual(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
   return a.every((r, i) => r.length === b[i].length && r.every((v, k) => v === b[i][k]));
 }
 
-module.exports = { toPhysical, mergeRects, chooseDisplay, rectsEqual, toWindowRects };
+module.exports = { toPhysical, mergeRects, chooseDisplay, rectsEqual };

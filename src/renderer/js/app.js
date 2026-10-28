@@ -12,7 +12,6 @@ import { Voice } from './voice.js';
 import { Brain } from './brain.js';
 import { linesFor } from './lines/index.js';
 import { pick, fmt } from './util.js';
-import { Viewport, contentBox } from './viewport.js';
 
 const host = window.host;
 const HIT_EVERY_MS = 33;
@@ -35,8 +34,8 @@ const fx = new Fx({ palette: pack.palette });
 const voice = new Voice({ volume: cfg.volume, muted: cfg.muted });
 host.listSounds().then((files) => voice.loadCustom(files)).catch(() => {});
 
-// the display she lives on (her window is only a small part of it): asked for, not waited for,
-// because the main process may have sent it before this page was listening
+// the display's work area (without your panels), asked for at startup: the push the main process
+// sends on load can arrive before this page is listening
 const startArea = await host.getArea();
 let area = { x: startArea.x, y: startArea.y, w: startArea.w, h: startArea.h };
 const hexa = new Hexa({
@@ -66,38 +65,21 @@ hexa.onSay = (key) => {
   panel.say({ kind: 'info', line, face: FACES[key] || 'calm', hold: key === 'boot' ? 5000 : 3200 });
 };
 
-// ---- the screen, and her window on it ----
-// She lives in a small window that follows her (not a full-screen layer). Everything is computed in
-// the display's coordinates; vp is the part of the display her window shows right now.
-
-const BODY_MARGIN = 80; // room around her body for her hair, her glow and the shards she sheds
-let vp = null;
-let origin = { x: startArea.originX || 0, y: startArea.originY || 0 };
-const viewport = new Viewport({ slack: 90 });
+// ---- the screen ----
 
 function fit(a) {
   const dpr = devicePixelRatio || 1;
   canvas.width = Math.round(innerWidth * dpr);
   canvas.height = Math.round(innerHeight * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (a) {
     area = { x: a.x, y: a.y, w: a.w, h: a.h };
-    origin = { x: a.originX || 0, y: a.originY || 0 };
     hexa.setArea(area);
   }
 }
 fit();
 addEventListener('resize', () => fit());
 host.onArea((a) => fit(a));
-function applyViewport(r) {
-  vp = r;
-  viewport.applied(r);
-  ui.style.transform = `translate(${-r[0]}px, ${-r[1]}px)`;
-}
-host.onViewport(applyViewport);
-host.getViewport().then((r) => !vp && r && applyViewport(r));
-
-// a pointer event, in display coordinates (screen coordinates don't move when her window does)
-const world = (e) => ({ x: e.screenX - origin.x, y: e.screenY - origin.y });
 
 // ---- from the main process ----
 
@@ -124,25 +106,19 @@ host.onConfig((c) => {
 
 host.onPointer((p) => hexa.onPointer(p));
 
-// everything in display coordinates, like the hit rects sent to the main process
-host.answerState(() => ({
-  mode: hexa.mode,
-  pos: hexa.pos,
-  viewport: vp,
-  hitRects: [...hexa.hitRects(), ...(vp ? panel.rects().map(([x, y, w, h]) => [x + vp[0], y + vp[1], w, h]) : [])],
-}));
+host.answerState(() => ({ mode: hexa.mode, pos: hexa.pos, hitRects: [...hexa.hitRects(), ...panel.rects()] }));
 
 // ---- the mouse, on her ----
 
 let press = null;
 canvas.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;
-  press = { ...world(e), t: performance.now(), dragging: false };
+  press = { x: e.clientX, y: e.clientY, t: performance.now(), dragging: false };
   canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!press) return;
-  const p = world(e);
+  const p = { x: e.clientX, y: e.clientY };
   if (!press.dragging && (Math.hypot(p.x - press.x, p.y - press.y) > CLICK_PX || performance.now() - press.t > CLICK_MS)) {
     press.dragging = hexa.onDragStart(press);
     if (!press.dragging) press = null;
@@ -151,7 +127,7 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerup', (e) => {
   if (!press) return;
-  const p = world(e);
+  const p = { x: e.clientX, y: e.clientY };
   if (press.dragging) hexa.onDragEnd(p);
   else if (Math.hypot(p.x - press.x, p.y - press.y) <= CLICK_PX && performance.now() - press.t <= CLICK_MS) {
     if (hexa.onClick() === 'status') panel.say({ kind: 'info', line: brain.status(), face: 'smug', hold: 4500 });
@@ -215,28 +191,21 @@ function frame(now) {
   fx.update(dt);
   panel.update();
 
-  if (vp) {
-    const dpr = devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, -vp[0] * dpr, -vp[1] * dpr);
-    ctx.clearRect(vp[0], vp[1], vp[2], vp[3]);
-    fx.draw(ctx);
-    hexa.draw(ctx);
-  }
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+  fx.draw(ctx);
+  hexa.draw(ctx);
 
   const body = hexa.hitRects();
-  const bodyBox = contentBox(body, 0);
-  if (bodyBox) panel.anchor(bodyBox, area);
-  // the panel's DOM rects are relative to her window; back to display coordinates
-  const panelRects = vp ? panel.rects().map(([x, y, w, h]) => [x + vp[0], y + vp[1], w, h]) : [];
-
-  // her window follows what she draws: her body (with room for her hair), her panel, live effects
-  const needed = [bodyBox && contentBox([bodyBox], BODY_MARGIN * hexa.scale), ...panelRects, fx.bounds()].filter(Boolean);
-  const want = viewport.want(contentBox(needed, 0), now);
-  if (want) host.setViewport(want);
-
+  if (body.length) {
+    const x0 = Math.min(...body.map((r) => r[0]));
+    const y0 = Math.min(...body.map((r) => r[1]));
+    const x1 = Math.max(...body.map((r) => r[0] + r[2]));
+    const y1 = Math.max(...body.map((r) => r[1] + r[3]));
+    panel.anchor([x0, y0, x1 - x0, y1 - y0], area);
+  }
   if (now - lastHits >= HIT_EVERY_MS) {
     lastHits = now;
-    const rects = [...body, ...panelRects].map((r) => r.map((v) => Math.round(v)));
+    const rects = [...body, ...panel.rects()].map((r) => r.map((v) => Math.round(v)));
     const key = JSON.stringify(rects);
     if (key !== sentHits) {
       sentHits = key;

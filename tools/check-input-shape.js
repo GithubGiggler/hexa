@@ -1,8 +1,8 @@
 'use strict';
 
 // Checks, against the running app (npm run dev), that clicks land on Hexa only where she is:
-// the middle of each of her hit rects must belong to her window, and points in the transparent
-// margin of her window must go to whatever is underneath. Prints PASS, or each failing point.
+// the middle of each of her hit rects must belong to her overlay, and points around her and in the
+// corners of the screen must go to whatever is underneath. Prints PASS, or each failing point.
 //
 //   node tools/check-input-shape.js
 
@@ -40,13 +40,14 @@ const insideAny = (rects, x, y) => rects.some(([rx, ry, rw, rh]) => x >= rx - 2 
 
   for (const [x, y, w, h] of s.hitRects) checks.push({ what: 'her (hit rect centre)', x: x + w / 2, y: y + h / 2, expect: true });
 
-  // the transparent margin of her own window: everything in it but her should pass through
-  const [vx, vy, vw, vh] = s.viewport;
-  const margin = [[vx + 8, vy + 8], [vx + vw - 8, vy + 8], [vx + 8, vy + vh - 8], [vx + vw - 8, vy + vh - 8], [vx + vw / 2, vy + 8]];
-  for (const [x, y] of margin) {
-    if (x < 0 || y < 0 || x > s.display.width || y > s.display.height) continue; // off-screen slack
+  // around her (just outside her body) and the corners of the screen: all of it must pass through
+  const [bx, by, bw, bh] = s.hitRects[0] || [0, 0, 0, 0];
+  const around = [[bx - 60, by + bh / 2], [bx + bw + 60, by + bh / 2], [bx + bw / 2, by - 60]];
+  const corners = [[20, 20], [s.display.width - 20, 20], [20, s.display.height - 20], [s.display.width / 2, s.display.height / 2]];
+  for (const [x, y] of [...around, ...corners]) {
+    if (x < 0 || y < 0 || x > s.display.width || y > s.display.height) continue;
     if (insideAny(s.hitRects, x, y)) continue;
-    checks.push({ what: 'her window margin', x, y, expect: false });
+    checks.push({ what: 'around her', x, y, expect: false });
   }
 
   for (const c of checks) {
@@ -61,5 +62,5 @@ const insideAny = (rects, x, y) => rects.some(([rx, ry, rw, rh]) => x >= rx - 2 
     for (const f of failures) console.log(`  ${f}`);
     process.exit(1);
   }
-  console.log(`PASS (${checks.length} points: ${s.hitRects.length} on her, ${checks.length - s.hitRects.length} through her window's margin)`);
+  console.log(`PASS (${checks.length} points: ${s.hitRects.length} on her, ${checks.length - s.hitRects.length} around her passed through)`);
 })();

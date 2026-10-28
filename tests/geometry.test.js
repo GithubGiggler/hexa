@@ -41,11 +41,3 @@ test('rectsEqual', () => {
   assert.equal(rectsEqual([], []), true);
   assert.equal(rectsEqual(null, []), false);
 });
-
-test('toWindowRects shifts world rects into the window and clips them', () => {
-  const { toWindowRects } = require('../src/main/geometry');
-  const vp = [1000, 500, 400, 300];
-  assert.deepEqual(toWindowRects([[1100, 600, 50, 50]], vp), [[100, 100, 50, 50]]);
-  assert.deepEqual(toWindowRects([[950, 480, 100, 100]], vp), [[0, 0, 50, 80]]);
-  assert.deepEqual(toWindowRects([[0, 0, 10, 10]], vp), []);
-});

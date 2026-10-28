@@ -77,34 +77,3 @@ test('draw runs on a canvas for every effect', () => {
   fx.draw(ctx, 800, 600);
   assert.ok(calls.includes('stroke') && calls.includes('fill'));
 });
-
-test('bounds() is the room live effects need, null when there are none', () => {
-  const fx = new Fx({ palette, rand });
-  assert.equal(fx.bounds(), null);
-  fx.shockwave(500, 500);
-  const [x, y, w, h] = fx.bounds();
-  assert.ok(x <= 500 - 200 && y <= 500 - 200 && x + w >= 500 + 200 && y + h >= 500 + 200);
-  fx.bolt({ x: 100, y: 100 }, { x: 140, y: 120 });
-  const b = fx.bounds();
-  assert.ok(b[0] <= 100 && b[1] <= 100);
-});
-
-test('dropFar removes what is far from her', () => {
-  const fx = new Fx({ palette, rand });
-  fx.shards(100, 100, 10, { spread: 1 });
-  fx.slit(100, 100);
-  fx.shards(2000, 1000, 5, { spread: 1 });
-  fx.dropFar(2000, 1000, 400);
-  assert.equal(fx.count(), 5);
-  assert.ok(fx.effects.every((e) => e.kind !== 'slit'));
-});
-
-test('the teleport scar and the light column stay small and short', () => {
-  const fx = new Fx({ palette, rand });
-  fx.slit(100, 900);
-  fx.column(100, 900);
-  const slit = fx.effects.find((e) => e.kind === 'slit');
-  assert.ok(slit.life <= 0.35);
-  const [, y] = fx.bounds();
-  assert.ok(900 - y <= 380, 'the column does not reach up the whole screen');
-});

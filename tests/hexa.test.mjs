@@ -237,23 +237,6 @@ test('an alert answered while she is still teleporting over does not leave her c
   assert.equal(h.alerting, false);
 });
 
-test('her boot assembles her from a ring around her, not from the screen edges', () => {
-  const { h, fxCalls, advance } = make();
-  h.pos = { x: 1280, y: 900 }; // mid-screen, far from every edge
-  h.boot();
-  advance(1);
-  const call = fxCalls.find((c) => c[0] === 'assemble');
-  const [, points, target] = call;
-  for (const p of points) assert.ok(Math.hypot(p.x - target.x, p.y - target.y) <= 400, 'near her');
-});
-
-test('arriving from a teleport drops effects left far behind', () => {
-  const { h, fxCalls, advance } = make();
-  h.teleport({ x: 400, y: 900 });
-  advance(1.5);
-  assert.ok(fxCalls.some((c) => c[0] === 'dropFar'));
-});
-
 test('drop() lifts her up and lets her fall onto the floor', () => {
   const { h, advance } = make();
   h.drop();

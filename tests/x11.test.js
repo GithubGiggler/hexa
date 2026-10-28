@@ -46,14 +46,3 @@ test('hasCompositor answers a boolean', { skip: !process.env.DISPLAY && 'no DISP
     x11.close();
   }
 });
-
-test('wmStateEvent encodes a _NET_WM_STATE client message', () => {
-  const { wmStateEvent } = require('../src/main/platform/linux/x11');
-  const buf = wmStateEvent(0x1234567, 200, 1, 301, 302);
-  assert.equal(buf.length, 32);
-  assert.equal(buf.readUInt8(0), 33, 'ClientMessage');
-  assert.equal(buf.readUInt8(1), 32, 'format 32');
-  assert.equal(buf.readUInt32LE(4), 0x1234567, 'window');
-  assert.equal(buf.readUInt32LE(8), 200, 'message type');
-  assert.deepEqual([12, 16, 20, 24].map((o) => buf.readUInt32LE(o)), [1, 301, 302, 1], 'add, two states, from an application');
-});

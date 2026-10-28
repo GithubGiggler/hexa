@@ -8,23 +8,6 @@ const x11 = require('x11');
 
 const call = (fn) => new Promise((resolve, reject) => fn((err, value) => (err ? reject(err) : resolve(value))));
 
-// A _NET_WM_STATE request as the EWMH spec wants it: a 32-byte ClientMessage sent to the root
-// window. action 1 adds the states, 0 removes them; the last 1 says it comes from an application.
-function wmStateEvent(window, typeAtom, action, stateA, stateB = 0) {
-  const buf = Buffer.alloc(32);
-  buf.writeUInt8(33, 0);           // ClientMessage
-  buf.writeUInt8(32, 1);           // format: 32-bit data
-  buf.writeUInt32LE(window >>> 0, 4);
-  buf.writeUInt32LE(typeAtom >>> 0, 8);
-  buf.writeUInt32LE(action, 12);
-  buf.writeUInt32LE(stateA >>> 0, 16);
-  buf.writeUInt32LE(stateB >>> 0, 20);
-  buf.writeUInt32LE(1, 24);
-  return buf;
-}
-
-const SUBSTRUCTURE = (1 << 19) | (1 << 20); // SubstructureNotify | SubstructureRedirect
-
 function createClient(display) {
   return new Promise((resolve) => {
     let done = false;
@@ -86,33 +69,6 @@ async function connect() {
       return owner !== 0;
     },
 
-    // Asks the window manager to add states to a window, e.g. keep it out of the taskbar and Alt+Tab.
-    async setWmState(xid, names) {
-      const type = await call((cb) => X.InternAtom(false, '_NET_WM_STATE', cb));
-      const atoms = [];
-      for (const name of names) atoms.push(await call((cb) => X.InternAtom(false, name, cb)));
-      for (let i = 0; i < atoms.length; i += 2) {
-        X.SendEvent(root, false, SUBSTRUCTURE, wmStateEvent(xid, type, 1, atoms[i], atoms[i + 1] || 0));
-      }
-    },
-
-    // Is the window manager managing this window? An override-redirect window (what Chromium makes
-    // of a frameless 'toolbar') isn't: no taskbar, pager, Alt+Tab or Overview, and no focus.
-    async isManaged(xid) {
-      const a = await call((cb) => X.GetWindowAttributes(xid, cb));
-      return !a.overrideRedirect;
-    },
-
-    // For checking: whether it's managed, and its _NET_WM_STATE as atom names.
-    async windowInfo(xid) {
-      const managed = await this.isManaged(xid);
-      const type = await call((cb) => X.InternAtom(false, '_NET_WM_STATE', cb));
-      const prop = await call((cb) => X.GetProperty(0, xid, type, 0, 0, 64, cb));
-      const state = [];
-      for (let i = 0; prop.data && i + 4 <= prop.data.length; i += 4) state.push(await call((cb) => X.GetAtomName(prop.data.readUInt32LE(i), cb)));
-      return { managed, state };
-    },
-
     // A round trip: every request sent before it has been handled when it resolves.
     sync() {
       return call((cb) => X.GetInputFocus(cb));
@@ -129,4 +85,4 @@ async function connect() {
   };
 }
 
-module.exports = { connect, wmStateEvent };
+module.exports = { connect };

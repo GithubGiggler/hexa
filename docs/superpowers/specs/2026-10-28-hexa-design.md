@@ -194,34 +194,25 @@ hexa CLI ──Unix socket──▶ bridge ──▶ renderer (say, react, show,
 
 ## 6. Linux platform layer
 
-### 6.1 Her window (revised 2026-10-28)
-
-> **Revision:** the maintainer asked that she "not cover my entire screen" and "fit seamlessly into my workflow, like an actual
-> construct assistant, not another app". The full-screen overlay is replaced by a small window that follows her.
-
-- **A window only as big as she is.** One transparent, frameless window sized to her body, her panel and her ticker,
-  plus a margin. It moves with her as she moves around the display, and grows briefly only while an effect around her
-  needs room (a zap, the victory burst), then shrinks back. It never covers the whole screen.
-- **Display coordinates, a moving viewport.** Everything she does (positions, effects, the panel) is computed in the
-  display's coordinates; the window is a viewport onto them. The renderer asks for a viewport that contains what it
-  needs to draw, with slack so the window moves in occasional steps, not every frame; the main process moves the window
-  and reports the viewport it applied, which the renderer draws with.
-- **Not another app.** The window is not in the taskbar, the pager, Alt+Tab or KDE's Overview
-  (`_NET_WM_STATE_SKIP_TASKBAR`, `_NET_WM_STATE_SKIP_PAGER`, `_KDE_NET_WM_STATE_SKIP_SWITCHER`), stays above normal
-  windows (`_NET_WM_STATE_ABOVE`), never takes focus, and is visible on all virtual desktops.
-- **Effects stay around her.** Her boot assembles her from a ring of shards nearby (not from the screen edges); the
-  teleport scar fades before she arrives elsewhere; effects far from her are dropped rather than stretching the window.
+### 6.1 Overlay window
+- One transparent, frameless overlay window covering the display Hexa is on; it moves to another display when she
+  does (as upstream). Visible on all virtual desktops, skips the taskbar and pager.
+- Always on top: `setAlwaysOnTop(true, 'screen-saver')` plus `_NET_WM_STATE_ABOVE`. The `_NET_WM_WINDOW_TYPE` that
+  keeps her above normal windows without stealing focus on KWin is chosen by test in M1 (candidates: `toolbar`,
+  `notification`, `utility`).
 - Requires a compositor for transparency (KWin compositing on X11 is on by default). Without one, she shows a one-time
   notice explaining it.
 - On Plasma Wayland, Electron runs under **XWayland** (`--ozone-platform=x11`), which keeps input shapes and
   always-on-top working; window tracking comes from the KWin script.
 
 ### 6.2 Click-through
-
-- **Primary (X11 and XWayland):** her window gets an **input-only shape** (XShape `ShapeInput`) set to the rectangles
-  covering her body, her panel, the ticker and any buttons, relative to the window, updated as they or the viewport
-  change (at most 30 times a second). The transparent margins of her window pass clicks to whatever is underneath.
-- **Fallback:** Electron `setIgnoreMouseEvents` toggled by polling the pointer 30 times a second against the hit rects.
+- **Primary (X11 and XWayland):** the overlay's X window gets an **input-only shape** (XShape `ShapeInput`) set to the
+  rectangles covering Hexa's body, her panel, the HUD and any buttons, updated as they change (at most 30 times a
+  second). The bounding shape is untouched, so effects still draw across the whole screen. The X server routes every
+  click exactly; nothing polls the pointer. The renderer computes the rectangles from her bones' bounding boxes.
+- **Fallback:** Electron `setIgnoreMouseEvents` toggled by polling the pointer 30 times a second against the
+  renderer's hit mask.
+- This is the first thing built and verified in M1 (risk R1).
 
 ### 6.3 Window tracking
 - **X11 backend** (`x11` package, pure JavaScript, no native build):
