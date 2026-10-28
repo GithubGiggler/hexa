@@ -7,6 +7,7 @@ const TAU = Math.PI * 2;
 const DRAWING = 1 / 12; // effects that are "drawn" (bolts, speed lines) change on twos
 const MAX_DT = 0.05;
 const HEX = '0123456789ABCDEF';
+const COLUMN_H = 320; // her arrival column stays near her: she lives in a small window, not across the screen
 
 function hexPath(ctx, x, y, r, rot = 0) {
   ctx.beginPath();
@@ -19,6 +20,24 @@ function hexPath(ctx, x, y, r, rot = 0) {
 }
 
 const easeIn = (t) => t * t * t;
+
+// How far an effect reaches, [x, y, w, h].
+function extent(e) {
+  switch (e.kind) {
+    case 'bolt': {
+      const xs = e.points.map((p) => p.x);
+      const ys = e.points.map((p) => p.y);
+      const pad = e.rough + 12;
+      return [Math.min(...xs) - pad, Math.min(...ys) - pad, Math.max(...xs) - Math.min(...xs) + 2 * pad, Math.max(...ys) - Math.min(...ys) + 2 * pad];
+    }
+    case 'speed': return [e.cx - e.outer, e.cy - e.outer, 2 * e.outer, 2 * e.outer];
+    case 'ring': return [e.x - 240, e.y - 240, 480, 480];
+    case 'slit': return [e.x - 12, e.y - 50, 24, 100];
+    case 'column': return [e.x - 30, e.y - COLUMN_H, 60, COLUMN_H];
+    case 'flash': return [e.x - 240, e.y - 240, 480, 480];
+    default: return [0, 0, 0, 0];
+  }
+}
 
 export class Fx {
   constructor({ palette, rand = Math.random, cap = 600 }) {
@@ -53,6 +72,31 @@ export class Fx {
 
   count() {
     return this.particles.length;
+  }
+
+  // The room the live effects need, [x, y, w, h] in display coordinates (null for none): her
+  // window grows to it for as long as they last.
+  bounds() {
+    const boxes = [];
+    for (const e of this.effects) boxes.push(extent(e));
+    for (const p of this.particles) boxes.push([p.x - 10, p.y - 10, 20, 20]);
+    if (!boxes.length) return null;
+    const x0 = Math.min(...boxes.map((b) => b[0]));
+    const y0 = Math.min(...boxes.map((b) => b[1]));
+    const x1 = Math.max(...boxes.map((b) => b[0] + b[2]));
+    const y1 = Math.max(...boxes.map((b) => b[1] + b[3]));
+    return [x0, y0, x1 - x0, y1 - y0];
+  }
+
+  // Drops whatever is further than r from (x, y): left behind by a teleport, it would otherwise
+  // stretch her window across the screen.
+  dropFar(x, y, r) {
+    const near = (px, py) => Math.hypot(px - x, py - y) <= r;
+    this.particles = this.particles.filter((p) => near(p.x, p.y));
+    this.effects = this.effects.filter((e) => {
+      const [ex, ey, ew, eh] = extent(e);
+      return near(ex + ew / 2, ey + eh / 2);
+    });
   }
 
   // ---- particles ----
@@ -117,7 +161,7 @@ export class Fx {
     return e;
   }
 
-  speedLines(cx, cy, { n = 26, inner = 90, outer = 600 } = {}) {
+  speedLines(cx, cy, { n = 26, inner = 80, outer = 300 } = {}) {
     const e = { kind: 'speed', cx, cy, n, inner, outer, life: 0.42, max: 0.42, clock: 0, angles: [] };
     e.angles = Array.from({ length: n }, () => this.r(0, TAU));
     this.effects.push(e);
@@ -127,12 +171,12 @@ export class Fx {
     this.effects.push({ kind: 'ring', x, y, life: 0.45, max: 0.45, color: color || this.palette.cyan });
   }
 
-  // where she was, after she teleports: a black slit with a cyan line in it
+  // where she was, after she teleports: a black slit with a cyan line in it, gone before she arrives
   slit(x, y) {
-    this.effects.push({ kind: 'slit', x, y, life: 0.9, max: 0.9 });
+    this.effects.push({ kind: 'slit', x, y, life: 0.32, max: 0.32 });
   }
 
-  // where she arrives: a column of light down to her
+  // where she arrives: a short column of light down onto her
   column(x, y) {
     this.effects.push({ kind: 'column', x, y, life: 0.5, max: 0.5 });
   }
@@ -209,15 +253,16 @@ export class Fx {
     for (const e of this.effects) {
       const k = e.max ? Math.max(0, e.life / e.max) : 1;
       if (e.kind === 'column') {
-        const g = ctx.createLinearGradient(0, 0, 0, e.y);
+        const top = e.y - COLUMN_H;
+        const g = ctx.createLinearGradient(0, top, 0, e.y);
         g.addColorStop(0, 'rgba(62,242,255,0)');
         g.addColorStop(1, cyan);
         ctx.globalAlpha = 0.55 * k;
         ctx.fillStyle = g;
-        ctx.fillRect(e.x - 22 * k - 4, 0, 44 * k + 8, e.y);
+        ctx.fillRect(e.x - 22 * k - 4, top, 44 * k + 8, COLUMN_H);
         ctx.globalAlpha = 0.9 * k;
         ctx.fillStyle = white;
-        ctx.fillRect(e.x - 2, 0, 4, e.y);
+        ctx.fillRect(e.x - 2, top, 4, COLUMN_H);
       } else if (e.kind === 'slit') {
         ctx.globalAlpha = k;
         ctx.fillStyle = '#000';

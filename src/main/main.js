@@ -154,7 +154,10 @@ function start() {
       fs.writeFileSync(file, image.toPNG());
       return { ok: true, file };
     }
-    if (name === 'state') return { ok: true, ...(await askRenderer()), overlay: overlay.mode, display: overlay.display.bounds };
+    if (name === 'state') {
+      const wm = x11 ? await x11.windowInfo(overlay.xid).catch((err) => ({ error: err.message })) : null;
+      return { ok: true, ...(await askRenderer()), overlay: overlay.mode, display: overlay.display.bounds, window: overlay.win.getBounds(), viewport: overlay.viewport, wm };
+    }
     return { ok: false, error: `no debug route "${name}"` };
   }
 
@@ -177,12 +180,18 @@ function start() {
 
   function registerIpc() {
     ipcMain.handle('config:get', () => rendererConfig());
+    ipcMain.handle('overlay:area', () => overlay.area());
+    ipcMain.handle('viewport:get', () => overlay.viewport);
     ipcMain.handle('config:set', (_e, patch) => {
       // the renderer may only record what it learned, not change your settings behind your back
       const allowed = Object.fromEntries(Object.entries(patch || {}).filter(([k]) => ['welcomed', 'linked'].includes(k)));
       return updateConfig(allowed);
     });
     ipcMain.on('hits:set', (_e, rects) => overlay?.setHitRects(rects));
+    // the renderer needs her window somewhere else, or bigger for a moment
+    ipcMain.on('viewport:set', (_e, rect) => {
+      if (Array.isArray(rect) && rect.length === 4 && rect.every(Number.isFinite)) overlay?.setViewport(rect);
+    });
     ipcMain.on('menu:open', () => trayHandle?.popup({ window: overlay.win }));
     ipcMain.handle('sounds:list', () => {
       try {

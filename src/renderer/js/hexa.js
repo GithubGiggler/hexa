@@ -342,6 +342,7 @@ export class Hexa {
       this.later(150, () => {
         this.pos = { ...dest };
         this.resetChains();
+        this.dropFarEffects();
         this.setFade(1, 150);
         this.later(150, () => {
           this.alpha = 1;
@@ -365,6 +366,7 @@ export class Hexa {
         this.later(TELEPORT_GAP, () => {
           this.pos = { ...dest };
           this.resetChains();
+          this.dropFarEffects();
           this.hidden = false;
           this.fx.column(this.pos.x, this.pos.y);
           this.voice.play('teleport-in');
@@ -399,6 +401,12 @@ export class Hexa {
       this.upside = spot.side === 'top';
       if (this.upside) this.pos = { x: spot.x, y: spot.y };
     });
+  }
+
+  // what she left behind where she was would otherwise stretch her window across the screen
+  dropFarEffects() {
+    const b = this.body();
+    this.fx.dropFar(b.x, b.y, 400 * this.scale);
   }
 
   resetChains() {
@@ -522,10 +530,12 @@ export class Hexa {
     this.later(600, () => {
       this.voice.play('boot');
       const b = this.body();
-      const { x, y, w, h } = this.area;
-      const pts = Array.from({ length: 40 }, (_, i) => (i % 2
-        ? { x: x + w, y: y + this.rand() * h }
-        : { x: x + this.rand() * w, y: y + h }));
+      // her shards come in from a ring around her, not from across your screen
+      const pts = Array.from({ length: 40 }, (_, i) => {
+        const a = (i / 40) * Math.PI * 2 + this.rand() * 0.3;
+        const r = (180 + this.rand() * 120) * this.scale;
+        return { x: b.x + Math.cos(a) * r, y: b.y + Math.sin(a) * r };
+      });
       this.fx.assemble(pts, b, 1100);
     });
     this.later(1700, () => {
