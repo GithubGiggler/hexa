@@ -79,6 +79,8 @@ export class Hexa {
     this.peekSpot = null;
     this.resumeMode = null;
     this.teleportWatchdog = null;
+    this.celebrating = null;            // resolves a victory in progress
+    this.onBackground = null;           // (inBackground) => void: tells the main process (config, tray)
     player.stance('stand');
     this.solve(0);
   }
@@ -250,7 +252,14 @@ export class Hexa {
 
   // exit 0: to the middle of the screen, then the whole victory. Resolves once she's back down.
   celebrate() {
-    return new Promise((resolve) => {
+    return new Promise((done) => {
+      // whatever happens (the background, a cut animation), the caller gets its answer once
+      const resolve = () => {
+        if (this.celebrating === resolve) this.celebrating = null;
+        done();
+      };
+      this.celebrating?.();
+      this.celebrating = resolve;
       if (this.mode === 'background' || this.mode === 'drag' || this.mode === 'fall') return resolve();
       if (this.reduced) {
         this.player.play('hop');
@@ -480,8 +489,14 @@ export class Hexa {
     return 'status';
   }
 
+  // Ctrl+Alt+H, her menu, or a click on her core. setBackground is the idempotent form.
+  setBackground(on) {
+    if (Boolean(on) !== (this.mode === 'background')) this.toggleBackground();
+  }
+
   toggleBackground() {
     if (this.mode === 'background') {
+      this.boot0 = null;
       this.coreAlert = false;
       this.pos = restSpot(this.area, this.size);
       this.resetChains();
@@ -491,8 +506,16 @@ export class Hexa {
       this.player.play('resume');
       this.activity();
       this.say('back');
+      this.onBackground?.(false);
       return;
     }
+    // nothing in flight may pull her back out: no act, no pending step of a teleport or her boot
+    this.player.stop();
+    this.teleportWatchdog = null;
+    this.resumeMode = null;
+    this.wantMode = null;
+    this.boot0 = null;
+    this.celebrating?.();
     this.drag = null;
     this.target = null;
     this.tasks = [];
@@ -502,6 +525,7 @@ export class Hexa {
     this.coreAlert = false;
     this.enterMode('background');
     this.say('background');
+    this.onBackground?.(true);
   }
 
   setArea(area) {

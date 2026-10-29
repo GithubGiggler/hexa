@@ -48,6 +48,9 @@ brain.linked = cfg.linked;
 brain.watching = cfg.claude;
 brain.onLinked = () => host.setConfig({ linked: true });
 
+// a click on her core brings her back: the main process keeps her setting and her tray in step
+hexa.onBackground = (inBackground) => host.setConfig({ visible: !inBackground });
+
 // her emblem follows the ticker: amber while Claude thinks, magenta while it waits on you, red on errors
 const setTicker = panel.setTicker.bind(panel);
 panel.setTicker = (t) => {
@@ -88,8 +91,8 @@ host.onEvent((evt) => {
   return brain.handle(evt);
 });
 
-host.onCommand(({ name }) => {
-  if (name === 'background') hexa.toggleBackground();
+host.onCommand(({ name, on }) => {
+  if (name === 'background') hexa.setBackground(on ?? hexa.mode !== 'background');
   else if (name === 'teleport') hexa.teleport();
   else if (name === 'resume') brain.resume();
   else if (name === 'showcase') showcase();

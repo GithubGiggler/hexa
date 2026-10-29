@@ -279,3 +279,69 @@ test('a teleport whose animation gets cut off still arrives', () => {
   assert.equal(h.hidden, false);
   assert.equal(h.alpha, 1);
 });
+
+// ---- final review fix: the background (Ctrl+Alt+H) always holds ----
+
+test('background pressed mid-teleport stays background', () => {
+  const { h, advance } = make();
+  h.teleport({ x: 600, y: 900 });
+  advance(0.1);
+  h.toggleBackground();
+  advance(3);
+  assert.equal(h.mode, 'background');
+});
+
+test('background during the alert chase stays background', () => {
+  const { h, advance } = make();
+  h.onPointer({ x: 400, y: 600, inside: false });
+  h.comeToPointer();
+  advance(0.2);
+  h.toggleBackground();
+  advance(3);
+  assert.equal(h.mode, 'background');
+});
+
+test('background during her victory stays background, and the victory still resolves', async () => {
+  const { h, advance } = make();
+  let resolved = false;
+  const p = h.celebrate('x').then(() => { resolved = true; });
+  advance(0.5);
+  h.toggleBackground();
+  advance(6);
+  await p;
+  assert.equal(resolved, true);
+  assert.equal(h.mode, 'background');
+});
+
+test('background and back during her boot: the boot log goes', () => {
+  const { h, advance } = make();
+  h.boot();
+  advance(0.5);
+  h.toggleBackground();
+  h.toggleBackground();
+  advance(6);
+  assert.equal(h.boot0, null);
+  assert.notEqual(h.mode, 'background');
+});
+
+test('setBackground(on) does nothing when she is already there', () => {
+  const { h, advance } = make();
+  h.setBackground(true);
+  h.setBackground(true);
+  advance(0.5);
+  assert.equal(h.mode, 'background');
+  h.setBackground(false);
+  h.setBackground(false);
+  advance(0.5);
+  assert.notEqual(h.mode, 'background');
+});
+
+test('clicking her core reports that she is visible again', () => {
+  const { h, advance } = make();
+  const reported = [];
+  h.onBackground = (bg) => reported.push(bg);
+  h.toggleBackground();
+  advance(0.5);
+  h.onClick();
+  assert.deepEqual(reported, [true, false]);
+});
