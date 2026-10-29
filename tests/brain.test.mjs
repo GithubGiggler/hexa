@@ -281,3 +281,19 @@ test('resume() puts the real ticker back if the thinking one was showing', () =>
   brain.resume();
   assert.deepEqual(panel.ticker, { verb: 'READS', target: 'b.ts', state: 'work' });
 });
+
+test('the first-contact line stays up: the same event does not wipe it with its own line', () => {
+  const { brain, said } = rig();
+  brain.linked = false;
+  brain.handle(evt('SessionStart', { source: 'startup' }));
+  assert.match(said.at(-1).line, /connected/i, 'the last thing said is that she can see Claude');
+  assert.equal(said.filter((m) => /connected/i.test(m.line)).length, 1);
+});
+
+test('a missed Read or Edit is not a crash: no knockback, just the ticker', () => {
+  const { brain, calls, played, panel } = rig();
+  brain.handle(evt('PostToolUseFailure', { tool_name: 'Edit', tool_input: { file_path: '/p/a.ts' }, error: 'String to replace not found in file.' }));
+  assert.ok(!calls.some((c) => c[0] === 'knockback'));
+  assert.ok(!played.includes('error'));
+  assert.equal(panel.ticker.state, 'error');
+});

@@ -345,3 +345,18 @@ test('clicking her core reports that she is visible again', () => {
   h.onClick();
   assert.deepEqual(reported, [true, false]);
 });
+
+test('an act asked for during her victory waits: the victory finishes and resolves', async () => {
+  const { h, played, advance } = make();
+  h.pos = { x: AREA.x + AREA.w / 2, y: AREA.y + AREA.h - 60 }; // already centre stage: no teleport first
+  let resolved = false;
+  const p = h.celebrate('x').then(() => { resolved = true; });
+  advance(0.3);
+  h.perform('hop');
+  h.knockback();
+  advance(6);
+  await p;
+  assert.equal(resolved, true);
+  assert.ok(played.includes('exit0'));
+  assert.ok(!played.includes('hop') && !played.includes('segfault'), 'nothing cut the victory short');
+});

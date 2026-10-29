@@ -177,14 +177,12 @@ export class Panel {
     c.card.style.top = `${Math.round(p.y)}px`;
   }
 
-  // what she's showing, for the overlay's clickable area
+  // what takes clicks, for the overlay's clickable area: the panel (its buttons, a click to close
+  // it); the ticker is only a label, so clicks go through it to what's underneath
   rects() {
-    const out = [];
-    for (const node of [this.current?.card, this.ticker.hidden ? null : this.ticker]) {
-      if (!node) continue;
-      const r = node.getBoundingClientRect();
-      if (r.width && r.height) out.push([r.left, r.top, r.width, r.height]);
-    }
-    return out;
+    const card = this.current?.card;
+    if (!card) return [];
+    const r = card.getBoundingClientRect();
+    return r.width && r.height ? [[r.left, r.top, r.width, r.height]] : [];
   }
 }

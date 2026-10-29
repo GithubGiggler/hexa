@@ -21,6 +21,7 @@ const THINK_LONG = 120000;
 const STALE_MS = 30 * 60 * 1000;
 // ticks come every second; a gap this long means the machine slept or the page froze
 const TICK_GAP_MS = 120000;
+const LINKED_HOLD_MS = 5000;
 // a job this small doesn't get the whole victory, just a word
 const BIG_JOB_ACTIONS = 3;
 const BIG_JOB_MS = 20000;
@@ -65,6 +66,7 @@ export class Brain {
     this.userName = '';
     this.thinking = null;   // { s, since, said } while Claude is quiet mid-task
     this.lastTick = null;
+    this.linkedAt = null;   // when she said she can see Claude (her first real event)
   }
 
   get t() {
@@ -101,6 +103,8 @@ export class Brain {
   }
 
   say(kind, line, s, extra = {}) {
+    // "I can see Claude!" is said once ever: the chatter right after it doesn't get to wipe it
+    if (this.linkedAt !== null && this.now() - this.linkedAt < LINKED_HOLD_MS && (kind === 'info' || kind === 'work')) return null;
     return this.panel.say({ kind, line, tag: s ? s.title || s.project : '', ...extra });
   }
 
@@ -121,6 +125,7 @@ export class Brain {
       this.linked = true;
       this.onLinked?.();
       this.say('info', this.line('linked', s), s, { face: 'laugh', hold: 5000 });
+      this.linkedAt = this.now();
     }
     const name = evt.hook_event_name;
     // these put her somewhere themselves; anything else just brings her out of hiding
@@ -188,6 +193,11 @@ export class Brain {
       this.thinking = null;
       this.settle();
       this.say('info', this.line('interrupted', s), s, { face: 'wide', hold: 4000 });
+      return;
+    }
+    // a missed Read or Edit isn't a crash: the ticker turns red, that's all; a failing command is
+    if (evt.tool_name !== 'Bash') {
+      this.panel.setTicker({ ...describeTool(evt, this.t.verbs), state: 'error' });
       return;
     }
     const detail = firstErrorLine(evt.error);

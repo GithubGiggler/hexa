@@ -32,6 +32,8 @@ const BOOT_LOG = [
 ];
 
 const BUSY = new Set(['drag', 'fall', 'teleport', 'boot', 'background']);
+// acts that must play to their end (their onEnd moves her on): nothing is played over them
+const MUST_FINISH = new Set(['exit0', 'land', 'segfault', 'teleportOut', 'teleportIn', 'suspend', 'resume', 'bootWave']);
 
 export class Hexa {
   constructor({ rig, player, fx, voice, area, size, scale = 1, rand = Math.random, now = Date.now, settings = {} }) {
@@ -212,6 +214,7 @@ export class Hexa {
 
   perform(act, opts = {}) {
     if (BUSY.has(this.mode) || this.mode === 'sleep' || this.mode === 'suspend') return;
+    if (MUST_FINISH.has(this.player.playing)) return;
     if (!this.player.acts[act]) return;
     this.player.play(act, { dir: opts.dir ?? this.dir, onCue: (c) => this.cue(c) });
   }
@@ -286,6 +289,7 @@ export class Hexa {
   knockback() {
     this.activity();
     if (BUSY.has(this.mode) || this.mode === 'sleep' || this.mode === 'suspend') return;
+    if (MUST_FINISH.has(this.player.playing)) return;
     this.errorUntil = this.now() + 4000;
     this.target = clampInto(this.area, { x: this.pos.x - this.towardCenter() * 30 * this.scale, y: this.pos.y }, this.size);
     this.player.play('segfault', { onCue: (c) => this.cue(c) });
