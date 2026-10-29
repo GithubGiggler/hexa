@@ -119,7 +119,13 @@ host.onWindows((snap) => {
   brain.onWindows(snap);
 });
 
-host.answerState(() => ({ mode: hexa.mode, pos: hexa.pos, hitRects: [...hexa.hitRects(), ...panel.rects()] }));
+host.answerState(() => ({
+  mode: hexa.mode,
+  pos: hexa.pos,
+  perch: hexa.perch,
+  pointing: hexa.pointing ? { id: hexa.pointing.rect.id ?? null, label: hexa.pointing.label } : null,
+  hitRects: [...hexa.hitRects(), ...panel.rects()],
+}));
 
 // ---- the mouse, on her ----
 
