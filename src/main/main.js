@@ -57,6 +57,7 @@ try {
 }
 
 if (!app.requestSingleInstanceLock()) {
+  console.log('[hexa] another Hexa is already running: this one quits');
   app.quit();
 } else {
   start();
@@ -150,7 +151,10 @@ function start() {
       }
       trayHandle?.rebuild();
     },
-    quit: () => app.quit(),
+    quit: () => {
+      console.log('[hexa] quit from her menu');
+      app.quit();
+    },
   };
 
   // Her overlay to another display, and her appearing there.
@@ -339,6 +343,13 @@ function start() {
         moveTo(d.id);
       }
     }, 500);
+  });
+
+  // why she stopped, for the log: her menu says so above; anything else is the system or a signal
+  app.on('before-quit', () => console.log('[hexa] quitting'));
+  process.on('SIGTERM', () => {
+    console.log('[hexa] quit by SIGTERM');
+    app.quit();
   });
 
   app.on('will-quit', () => {
