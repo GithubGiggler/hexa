@@ -34,6 +34,8 @@ const BOOT_LOG = [
 ];
 
 const BUSY = new Set(['drag', 'fall', 'teleport', 'boot', 'background']);
+// acts that must play to their end (their onEnd moves her on): nothing is played over them
+const MUST_FINISH = new Set(['exit0', 'land', 'segfault', 'teleportOut', 'teleportIn', 'suspend', 'resume', 'bootWave']);
 
 export class Hexa {
   constructor({ rig, player, fx, voice, area, size, scale = 1, rand = Math.random, now = Date.now, settings = {} }) {
@@ -85,6 +87,8 @@ export class Hexa {
     this.windows = { fg: 0, wins: [] }; // your windows, front first (main process)
     this.perch = null;                  // { id, dx }: the window she sits on
     this.pointing = null;               // { rect, aim, side, label, wire } while she points at something
+    this.celebrating = null;            // resolves a victory in progress
+    this.onBackground = null;           // (inBackground) => void: tells the main process (config, tray)
     player.stance('stand');
     this.solve(0);
   }
@@ -219,6 +223,7 @@ export class Hexa {
 
   perform(act, opts = {}) {
     if (BUSY.has(this.mode) || this.mode === 'sleep' || this.mode === 'suspend') return;
+    if (MUST_FINISH.has(this.player.playing)) return;
     if (!this.player.acts[act]) return;
     this.player.play(act, { dir: opts.dir ?? this.dir, onCue: (c) => this.cue(c) });
   }
@@ -331,7 +336,14 @@ export class Hexa {
 
   // exit 0: to the middle of the screen, then the whole victory. Resolves once she's back down.
   celebrate() {
-    return new Promise((resolve) => {
+    return new Promise((done) => {
+      // whatever happens (the background, a cut animation), the caller gets its answer once
+      const resolve = () => {
+        if (this.celebrating === resolve) this.celebrating = null;
+        done();
+      };
+      this.celebrating?.();
+      this.celebrating = resolve;
       if (this.mode === 'background' || this.mode === 'drag' || this.mode === 'fall') return resolve();
       if (this.reduced) {
         this.player.play('hop');
@@ -358,6 +370,7 @@ export class Hexa {
   knockback() {
     this.activity();
     if (BUSY.has(this.mode) || this.mode === 'sleep' || this.mode === 'suspend') return;
+    if (MUST_FINISH.has(this.player.playing)) return;
     this.errorUntil = this.now() + 4000;
     this.target = clampInto(this.area, { x: this.pos.x - this.towardCenter() * 30 * this.scale, y: this.pos.y }, this.size);
     this.player.play('segfault', { onCue: (c) => this.cue(c) });
@@ -723,8 +736,14 @@ export class Hexa {
     return 'status';
   }
 
+  // Ctrl+Alt+H, her menu, or a click on her core. setBackground is the idempotent form.
+  setBackground(on) {
+    if (Boolean(on) !== (this.mode === 'background')) this.toggleBackground();
+  }
+
   toggleBackground() {
     if (this.mode === 'background') {
+      this.boot0 = null;
       this.coreAlert = false;
       this.pos = restSpot(this.area, this.size);
       this.resetChains();
@@ -734,8 +753,16 @@ export class Hexa {
       this.player.play('resume');
       this.activity();
       this.say('back');
+      this.onBackground?.(false);
       return;
     }
+    // nothing in flight may pull her back out: no act, no pending step of a teleport or her boot
+    this.player.stop();
+    this.teleportWatchdog = null;
+    this.resumeMode = null;
+    this.wantMode = null;
+    this.boot0 = null;
+    this.celebrating?.();
     this.drag = null;
     this.target = null;
     this.tasks = [];
@@ -745,6 +772,7 @@ export class Hexa {
     this.coreAlert = false;
     this.enterMode('background');
     this.say('background');
+    this.onBackground?.(true);
   }
 
   setArea(area) {

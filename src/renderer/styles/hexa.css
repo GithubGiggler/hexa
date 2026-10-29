@@ -170,7 +170,7 @@ html, body {
   background: rgba(11, 16, 32, 0.85);
   border-left: 3px solid var(--tick, var(--cyan));
   color: var(--white);
-  pointer-events: auto;
+  pointer-events: none; /* only a label: clicks go through it */
 }
 .hx-ticker-verb { font-weight: 600; color: var(--tick, var(--cyan)); }
 .hx-ticker--work { --tick: var(--cyan); }

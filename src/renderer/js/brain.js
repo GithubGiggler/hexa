@@ -16,6 +16,12 @@ const WORKING_EVERY = 20; // say something about progress every N tool calls
 const THINK_AFTER = 15000;
 const THINK_SAY = 40000;
 const THINK_LONG = 120000;
+// a session with no events at all for this long is gone (closed terminal, killed process): no
+// SessionEnd ever comes, so it stops counting as working
+const STALE_MS = 30 * 60 * 1000;
+// ticks come every second; a gap this long means the machine slept or the page froze
+const TICK_GAP_MS = 120000;
+const LINKED_HOLD_MS = 5000;
 // a job this small doesn't get the whole victory, just a word
 const BIG_JOB_ACTIONS = 3;
 const BIG_JOB_MS = 20000;
@@ -61,6 +67,8 @@ export class Brain {
     this.thinking = null;   // { s, since, said } while Claude is quiet mid-task
     this.windows = { fg: 0, wins: [] }; // the latest window snapshot (main process)
     this.replyFor = null;   // the session whose whole answer she's holding up for you
+    this.lastTick = null;
+    this.linkedAt = null;   // when she said she can see Claude (her first real event)
   }
 
   get t() {
@@ -99,6 +107,8 @@ export class Brain {
   }
 
   say(kind, line, s, extra = {}) {
+    // "I can see Claude!" is said once ever: the chatter right after it doesn't get to wipe it
+    if (this.linkedAt !== null && this.now() - this.linkedAt < LINKED_HOLD_MS && (kind === 'info' || kind === 'work')) return null;
     return this.panel.say({ kind, line, tag: s ? s.title || s.project : '', ...extra });
   }
 
@@ -119,6 +129,7 @@ export class Brain {
       this.linked = true;
       this.onLinked?.();
       this.say('info', this.line('linked', s), s, { face: 'laugh', hold: 5000 });
+      this.linkedAt = this.now();
     }
     const name = evt.hook_event_name;
     // these put her somewhere themselves; anything else just brings her out of hiding
@@ -187,7 +198,16 @@ export class Brain {
 
   onToolFailure(evt, s) {
     if (evt.is_interrupt) {
+      // Esc: Claude Code sends no Stop after an interrupt, so the turn ends here
+      s.working = false;
+      this.thinking = null;
+      this.settle();
       this.say('info', this.line('interrupted', s), s, { face: 'wide', hold: 4000 });
+      return;
+    }
+    // a missed Read or Edit isn't a crash: the ticker turns red, that's all; a failing command is
+    if (evt.tool_name !== 'Bash') {
+      this.panel.setTicker({ ...describeTool(evt, this.t.verbs), state: 'error' });
       return;
     }
     const detail = firstErrorLine(evt.error);
@@ -217,6 +237,15 @@ export class Brain {
       return;
     }
     if (type === 'idle_prompt') {
+      // Claude is waiting for your next prompt: whatever it was doing is over (an interrupt, a
+      // permission prompt you dismissed)
+      s.working = false;
+      this.thinking = null;
+      if (s.waiting) {
+        s.waiting = false;
+        this.panel.clearKind('alert');
+      }
+      this.settle();
       this.voice.play('tick');
       return;
     }
@@ -303,13 +332,20 @@ export class Brain {
   // Once a second (app.js). Mid-task and nothing from Claude for a while: it's thinking (a big
   // question, a slow local model). The ticker counts so you can tell nothing froze.
   tick() {
+    const now = this.now();
+    if (this.lastTick !== null && now - this.lastTick > TICK_GAP_MS) this.resume(); // slept: not Claude being quiet
+    this.lastTick = now;
+    for (const s of this.busySessions) {
+      if (now - s.seen > STALE_MS) s.working = false;
+    }
     const busy = this.busySessions;
     if (!busy.length) {
+      if (this.thinking) this.settle();
       this.thinking = null;
       return;
     }
     const s = busy.sort((a, b) => b.seen - a.seen)[0];
-    const quiet = this.now() - s.seen;
+    const quiet = now - s.seen;
     if (s.waiting || quiet < THINK_AFTER) {
       if (this.thinking && s.last) this.panel.setTicker(s.last);
       this.thinking = null;
@@ -332,6 +368,7 @@ export class Brain {
   // After the machine wakes from sleep: the time it slept isn't Claude being quiet.
   resume() {
     const now = this.now();
+    if (this.thinking) this.panel.setTicker(this.thinking.s.last || null); // the thinking ticker goes
     for (const s of this.sessions.values()) s.seen = now;
     this.thinking = null;
   }

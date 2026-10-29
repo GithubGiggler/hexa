@@ -108,7 +108,7 @@ function start() {
     toggle: () => {
       const visible = !config.load().visible;
       config.save({ visible });
-      send('hexa:command', { name: 'background' });
+      send('hexa:command', { name: 'background', on: !visible }); // a set, not a flip: they can't drift apart
       trayHandle?.rebuild();
     },
     teleport: () => send('hexa:command', { name: 'teleport' }),
@@ -191,7 +191,7 @@ function start() {
     ipcMain.handle('overlay:area', () => overlay.area());
     ipcMain.handle('config:set', (_e, patch) => {
       // the renderer may only record what it learned, not change your settings behind your back
-      const allowed = Object.fromEntries(Object.entries(patch || {}).filter(([k]) => ['welcomed', 'linked'].includes(k)));
+      const allowed = Object.fromEntries(Object.entries(patch || {}).filter(([k]) => ['welcomed', 'linked', 'visible'].includes(k)));
       return updateConfig(allowed);
     });
     ipcMain.on('hits:set', (_e, rects) => overlay?.setHitRects(rects));

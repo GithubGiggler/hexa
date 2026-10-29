@@ -278,3 +278,85 @@ test("claudeWindow is the window of the session you talked to last", () => {
   brain.handle({ ...evt('UserPromptSubmit', { prompt: 'b', window_id: 66 }), session_id: 's2' });
   assert.equal(brain.claudeWindow().id, 66);
 });
+
+// ---- final review fixes: turns that end without a Stop, and sleep/resume ----
+
+test('an interrupted tool ends the turn: no thinking counter, she goes idle', () => {
+  const { brain, panel, calls, clock } = rig();
+  clock.set(0);
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  brain.handle(evt('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'sleep 99' } }));
+  brain.handle(evt('PostToolUseFailure', { tool_name: 'Bash', is_interrupt: true }));
+  assert.equal(brain.sessions.get('s1').working, false);
+  assert.ok(calls.some((c) => c[0] === 'setMode' && c[1] === 'idle'));
+  clock.set(60000);
+  brain.tick();
+  assert.notEqual(panel.ticker?.state, 'thinking');
+});
+
+test("Claude's idle prompt ends the turn and clears an unanswered alert", () => {
+  const { brain, calls } = rig();
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  brain.handle(evt('Notification', { notification_type: 'permission_prompt' }));
+  brain.handle(evt('Notification', { notification_type: 'idle_prompt' }));
+  const s = brain.sessions.get('s1');
+  assert.equal(s.working, false);
+  assert.equal(s.waiting, false);
+  assert.ok(calls.some((c) => c[0] === 'clearKind' && c[1] === 'alert'));
+});
+
+test('a session silent for 30 minutes stops counting as working', () => {
+  const { brain, panel, clock } = rig();
+  clock.set(0);
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  for (let t = 1000; t <= 31 * 60 * 1000; t += 1000) {
+    clock.set(t);
+    brain.tick();
+  }
+  assert.equal(brain.sessions.get('s1').working, false);
+  assert.equal(panel.ticker, null);
+});
+
+test('a tick that comes after a long gap (the PC slept) restarts the quiet timers by itself', () => {
+  const { brain, panel, said, clock } = rig();
+  clock.set(0);
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  clock.set(1000);
+  brain.handle(evt('PreToolUse', { tool_name: 'Read', tool_input: { file_path: '/a' } }));
+  brain.tick();
+  const before = said.length;
+  clock.set(3_600_000); // the tick fires before the resume signal arrives
+  brain.tick();
+  assert.equal(said.length, before, 'no thinking lines');
+  assert.notEqual(panel.ticker?.state, 'thinking');
+});
+
+test('resume() puts the real ticker back if the thinking one was showing', () => {
+  const { brain, panel, clock } = rig();
+  clock.set(0);
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  brain.handle(evt('PreToolUse', { tool_name: 'Read', tool_input: { file_path: '/a/b.ts' } }));
+  for (let t = 1000; t <= 20000; t += 1000) {
+    clock.set(t);
+    brain.tick();
+  }
+  assert.equal(panel.ticker.state, 'thinking');
+  brain.resume();
+  assert.deepEqual(panel.ticker, { verb: 'READS', target: 'b.ts', state: 'work' });
+});
+
+test('the first-contact line stays up: the same event does not wipe it with its own line', () => {
+  const { brain, said } = rig();
+  brain.linked = false;
+  brain.handle(evt('SessionStart', { source: 'startup' }));
+  assert.match(said.at(-1).line, /connected/i, 'the last thing said is that she can see Claude');
+  assert.equal(said.filter((m) => /connected/i.test(m.line)).length, 1);
+});
+
+test('a missed Read or Edit is not a crash: no knockback, just the ticker', () => {
+  const { brain, calls, played, panel } = rig();
+  brain.handle(evt('PostToolUseFailure', { tool_name: 'Edit', tool_input: { file_path: '/p/a.ts' }, error: 'String to replace not found in file.' }));
+  assert.ok(!calls.some((c) => c[0] === 'knockback'));
+  assert.ok(!played.includes('error'));
+  assert.equal(panel.ticker.state, 'error');
+});

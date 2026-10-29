@@ -126,3 +126,29 @@ test('settingsSnippet is just the hooks, for claude --settings', () => {
   assert.equal(Object.keys(snippet.hooks).length, 13);
   assert.equal(fs.existsSync(file), false, 'real settings untouched');
 });
+
+test('a symlinked settings.json stays a link, its real file updated, its mode kept', () => {
+  const { dataDir, file } = fresh();
+  const dotfiles = path.join(path.dirname(path.dirname(file)), 'dotfiles');
+  fs.mkdirSync(dotfiles, { recursive: true });
+  const real = path.join(dotfiles, 'claude-settings.json');
+  fs.writeFileSync(real, JSON.stringify({ env: { SECRET: 'x' } }));
+  fs.chmodSync(real, 0o600);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.symlinkSync(real, file);
+  claude.install(opts(dataDir));
+  assert.equal(fs.lstatSync(file).isSymbolicLink(), true, 'still a symlink');
+  const settings = JSON.parse(fs.readFileSync(real, 'utf8'));
+  assert.equal(settings.env.SECRET, 'x');
+  assert.equal(Object.keys(settings.hooks).length, 13, 'the real file got the hooks');
+  assert.equal(fs.statSync(real).mode & 0o777, 0o600, 'mode kept');
+  claude.uninstall();
+  assert.equal(fs.lstatSync(file).isSymbolicLink(), true, 'still a symlink after uninstall');
+  assert.equal(fs.statSync(real).mode & 0o777, 0o600);
+});
+
+test('a new settings.json is created readable only by you', () => {
+  const { dataDir, file } = fresh();
+  claude.install(opts(dataDir));
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+});

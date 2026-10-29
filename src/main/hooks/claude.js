@@ -85,15 +85,24 @@ function strip(settings) {
   return settings;
 }
 
+// Writes through a symlink (dotfiles managers keep settings.json in a repo) to the real file, keeps
+// its permissions (it can hold tokens under "env"), backs it up first, and swaps it in atomically.
+// A new file is readable only by you.
 function write(file, settings) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  if (fs.existsSync(file)) {
+  const exists = fs.existsSync(file);
+  const real = exists ? fs.realpathSync(file) : file;
+  const mode = exists ? fs.statSync(real).mode & 0o777 : 0o600;
+  if (exists) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    fs.copyFileSync(file, `${file}.hexa-backup-${stamp}`);
+    const backup = `${file}.hexa-backup-${stamp}`;
+    fs.copyFileSync(real, backup);
+    fs.chmodSync(backup, mode);
   }
-  const temp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(temp, JSON.stringify(settings, null, 2) + '\n');
-  fs.renameSync(temp, file);
+  const temp = `${real}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify(settings, null, 2) + '\n', { mode });
+  fs.chmodSync(temp, mode); // the umask may have taken bits off
+  fs.renameSync(temp, real);
 }
 
 function groupsFor(command) {
