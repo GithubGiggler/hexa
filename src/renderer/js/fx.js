@@ -362,6 +362,12 @@ export class Fx {
     ctx.restore();
   }
 
+  // the glass cracking where she hit the edge of the screen
+  crack(x, y) {
+    const rays = Array.from({ length: 7 }, () => ({ a: this.r(0, TAU), len: this.r(30, 90), kink: this.r(-0.4, 0.4) }));
+    this.effects.push({ kind: 'crack', x, y, rays, life: 1.4, max: 1.4 });
+  }
+
   glitch(ms, strength = 1) {
     this.glitchState = { life: ms / 1000, strength };
   }
@@ -490,6 +496,20 @@ export class Fx {
         this.drawPossess(ctx, e);
       } else if (e.kind === 'pointer') {
         this.drawPointer(ctx, e);
+      } else if (e.kind === 'crack') {
+        const k = Math.max(0, e.life / e.max);
+        ctx.globalAlpha = k;
+        ctx.strokeStyle = white;
+        ctx.lineWidth = 1.4;
+        for (const r of e.rays) {
+          const mx = e.x + Math.cos(r.a) * r.len * 0.5;
+          const my = e.y + Math.sin(r.a) * r.len * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(e.x, e.y);
+          ctx.lineTo(mx, my);
+          ctx.lineTo(mx + Math.cos(r.a + r.kink) * r.len * 0.5, my + Math.sin(r.a + r.kink) * r.len * 0.5);
+          ctx.stroke();
+        }
       } else if (e.kind === 'flash') {
         const tone = e.tone === 'red' ? red : e.tone === 'ink' ? navy : white;
         const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, 240);

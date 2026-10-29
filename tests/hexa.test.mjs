@@ -521,3 +521,57 @@ test('an act asked for during her victory waits: the victory finishes and resolv
   assert.ok(played.includes('exit0'));
   assert.ok(!played.includes('hop') && !played.includes('segfault'), 'nothing cut the victory short');
 });
+
+// ---- throwing (M2, rebuilt from the spec) ----
+
+function fling(h, advance, to) {
+  const start = { x: h.pos.x, y: h.pos.y - 120 };
+  assert.equal(h.onDragStart(start), true);
+  // three quick moves: fast enough to throw her
+  for (let i = 1; i <= 3; i++) {
+    advance(0.016);
+    h.onDragMove({ x: start.x + (to.x - start.x) * (i / 3), y: start.y + (to.y - start.y) * (i / 3) });
+  }
+  h.onDragEnd({ x: to.x, y: to.y });
+}
+
+test('let go mid-swing, she flies off and lands', () => {
+  const { h, advance } = make();
+  fling(h, advance, { x: h.pos.x - 300, y: h.pos.y - 400 });
+  assert.equal(h.mode, 'thrown');
+  advance(4);
+  assert.notEqual(h.mode, 'thrown');
+  assert.equal(h.pos.y, floor);
+});
+
+test('three throws in a row and she gets mad: no picking her up for a while', () => {
+  const { h, advance, said } = make();
+  for (let i = 0; i < 3; i++) {
+    fling(h, advance, { x: h.pos.x - 300, y: h.pos.y - 400 });
+    advance(4);
+  }
+  assert.ok(said.includes('mad'));
+  assert.equal(h.onDragStart({ x: h.pos.x, y: h.pos.y - 120 }), false, 'she won\'t be picked up');
+  advance(16, 1);
+  assert.equal(h.onDragStart({ x: h.pos.x, y: h.pos.y - 120 }), true, 'she forgives you after a while');
+});
+
+test('you can catch her mid-air', () => {
+  const { h, advance } = make();
+  fling(h, advance, { x: h.pos.x - 300, y: h.pos.y - 400 });
+  advance(0.1);
+  const [x, y, w, hh] = h.hitRects()[0];
+  assert.equal(h.onDragStart({ x: x + w / 2, y: y + hh / 2 }), true);
+  assert.equal(h.mode, 'drag');
+});
+
+test('arriving on another screen she appears near your pointer', () => {
+  const { h, played, advance } = make();
+  h.setArea({ x: 0, y: 0, w: 1920, h: 1080 });
+  h.onPointer({ x: 900, y: 500, inside: false });
+  h.arrive();
+  advance(1);
+  assert.ok(played.includes('teleportIn'));
+  assert.ok(Math.abs(h.pos.x - 900) < 300 && h.pos.y <= 1080);
+  assert.notEqual(h.mode, 'teleport');
+});

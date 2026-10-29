@@ -21,6 +21,8 @@ const TRAY = {
     soundsDir: 'Open custom sounds folder',
     wander: 'Wander around when idle',
     possess: 'Possess my windows',
+    screen: 'Screen',
+    follow: 'Follow me across screens',
     startup: 'Start at login',
     hooksOn: 'Claude Code hooks: installed',
     hooksOff: 'Install Claude Code hooks',

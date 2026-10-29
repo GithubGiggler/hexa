@@ -249,6 +249,18 @@ export const ACTS = {
     ],
   },
 
+  // thrown and down on the floor: sprawled flat, seeing stars, then back up and shaking it off
+  sprawl: {
+    keys: [
+      [6, { tilt: 80, bob: 28, arms: 1.2, visor: 'dizzy' }],
+      [10, { tilt: 84, bob: 30, arms: 1.3, visor: 'dizzy' }],
+      [3, { tilt: 40, bob: 12, visor: 'dizzy' }],
+      [3, { tilt: -6, bob: -2, head: 0.2 }],
+      [2, { head: -0.2 }],
+      [2, {}],
+    ],
+  },
+
   // folding down into her core
   suspend: {
     keys: [

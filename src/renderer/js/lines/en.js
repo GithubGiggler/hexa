@@ -186,6 +186,11 @@ export const LINES = {
     'Your pointer looked lonely.',
     'Just testing my voltage.',
   ],
+  mad: [
+    'Throw me one more time. I dare you.',
+    'That\'s it. No more rides.',
+    'I\'m a daemon, not a frisbee.',
+  ],
   sleepy: [
     'Getting sleepy. Wake me if anything happens.',
     'Going idle. Low-power mode.',

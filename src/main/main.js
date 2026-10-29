@@ -20,6 +20,7 @@ const claudeHooks = require('./hooks/claude');
 const { registerPrivileged, registerHexaProtocol } = require('./protocol');
 const { buildMenu, createTray } = require('./tray');
 const { trayLabels } = require('./labels');
+const { screen } = require('electron');
 const { playDemo } = require('./demo');
 const { startX11Windows } = require('./platform/linux/windows-x11');
 const { parentChain, windowForChain } = require('./platform/linux/proc');
@@ -101,7 +102,8 @@ function start() {
 
   function trayState() {
     const cfg = config.load();
-    return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, possess: cfg.possess, startAtLogin: autostart.isEnabled(), hooks: claudeHooks.status(), status: trayStatus };
+    const displays = screen.getAllDisplays().map((d, i) => ({ id: d.id, label: `Screen ${i + 1} (${d.bounds.width}×${d.bounds.height})`, current: d.id === overlay?.display.id }));
+    return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, possess: cfg.possess, follow: cfg.follow, displays, startAtLogin: autostart.isEnabled(), hooks: claudeHooks.status(), status: trayStatus };
   }
 
   const actions = {
@@ -126,6 +128,12 @@ function start() {
     },
     wander: (wander) => updateConfig({ wander }),
     possess: (possess) => updateConfig({ possess }),
+    follow: (follow) => updateConfig({ follow }),
+    screen: (id) => {
+      config.save({ displayId: id });
+      moveTo(id);
+      trayHandle?.rebuild();
+    },
     startup: (on) => {
       if (on) autostart.enable({ exec: process.env.APPIMAGE || process.execPath, args: app.isPackaged ? [] : [appDir] });
       else autostart.disable();
@@ -143,6 +151,17 @@ function start() {
     },
     quit: () => app.quit(),
   };
+
+  // Her overlay to another display, and her appearing there.
+  function moveTo(id) {
+    if (!overlay || overlay.display.id === id) return;
+    overlay.refit(id);
+    send('hexa:command', { name: 'arrive' });
+    trayHandle?.rebuild();
+  }
+
+  // the display your pointer is on
+  const pointerDisplay = () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
 
   // a question only the renderer can answer (where she is, what she's doing), for /debug/state
   function askRenderer() {
@@ -270,6 +289,10 @@ function start() {
       bridge = await createBridge({
         socketPath: paths.socketPath(),
         onEvent: (evt) => {
+          // Claude needs you: she comes to the screen you're on first
+          if (evt.hook_event_name === 'Notification' && ['permission_prompt', 'elicitation_dialog', 'elicitation_url_dialog', 'agent_needs_input'].includes(evt.notification_type)) {
+            moveTo(pointerDisplay().id);
+          }
           // Claude's window: the closest process up the hook's tree that owns one
           if (evt.ppid) {
             const win = windowForChain(parentChain(evt.ppid), lastWindows.wins);
@@ -295,6 +318,25 @@ function start() {
 
     if (!globalShortcut.register(cfg.shortcut, actions.toggle)) console.warn(`[hexa] could not register ${cfg.shortcut}`);
     powerMonitor.on('resume', () => send('hexa:command', { name: 'resume' }));
+
+    // your pointer on another screen for 3 s: she follows you there
+    let awaySince = null;
+    setInterval(() => {
+      if (!overlay || !config.load().follow || !config.load().visible) {
+        awaySince = null;
+        return;
+      }
+      const d = pointerDisplay();
+      if (d.id === overlay.display.id) {
+        awaySince = null;
+        return;
+      }
+      awaySince ??= Date.now();
+      if (Date.now() - awaySince >= 3000) {
+        awaySince = null;
+        moveTo(d.id);
+      }
+    }, 500);
   });
 
   app.on('will-quit', () => {

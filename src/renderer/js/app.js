@@ -99,6 +99,7 @@ host.onCommand(({ name, on }) => {
   else if (name === 'resume') brain.resume();
   else if (name === 'showcase') showcase();
   else if (name === 'guide') guide.menu();
+  else if (name === 'arrive') hexa.arrive();
 });
 
 host.onConfig((c) => {

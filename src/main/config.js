@@ -14,6 +14,7 @@ const DEFAULTS = {
   volume: 0.7,
   lang: 'auto',        // 'auto' follows LANG
   displayId: null,     // null: the primary display
+  follow: true,        // she follows your pointer to another screen after a few seconds
   wander: true,        // she drifts around when nothing's going on
   possess: true,       // now and then she dives into the window she sits on and takes it over
   visible: true,       // false: she's in the background (just her core)

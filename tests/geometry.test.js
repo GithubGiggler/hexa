@@ -41,3 +41,14 @@ test('rectsEqual', () => {
   assert.equal(rectsEqual([], []), true);
   assert.equal(rectsEqual(null, []), false);
 });
+
+test('sharedEdge: side by side, stacked with an offset, or apart', () => {
+  const { sharedEdge } = require('../src/main/geometry');
+  const big = { x: 0, y: 1080, width: 2560, height: 1440 };
+  const top = { x: 238, y: 0, width: 1920, height: 1080 }; // the reference machine's layout
+  assert.deepEqual(sharedEdge(big, top), { side: 'top', from: 238, to: 2158 });
+  assert.deepEqual(sharedEdge(top, big), { side: 'bottom', from: 238, to: 2158 });
+  const right = { x: 2560, y: 1080, width: 1920, height: 1080 };
+  assert.deepEqual(sharedEdge(big, right), { side: 'right', from: 1080, to: 2160 });
+  assert.equal(sharedEdge(top, right), null, 'only touching at a corner, or not at all');
+});

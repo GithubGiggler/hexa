@@ -6,7 +6,7 @@
 
 import { solvePose, hitRects as rigHitRects, apply } from './character/rig.js';
 import { drawCharacter, drawCore, makeChains, anchorFor } from './character/draw.js';
-import { restSpot, clampInto, peekSpots, fallStep, nextDriftTarget } from './motion.js';
+import { restSpot, clampInto, peekSpots, fallStep, nextDriftTarget, flightStep } from './motion.js';
 import { rand as between } from './util.js';
 
 const QUIET_SLEEP = 10 * 60 * 1000;   // nothing for this long: she falls asleep
@@ -33,9 +33,14 @@ const BOOT_LOG = [
   '[ OK ] Started hexa.service',
 ];
 
-const BUSY = new Set(['drag', 'fall', 'teleport', 'boot', 'background']);
+const BUSY = new Set(['drag', 'fall', 'teleport', 'boot', 'background', 'thrown']);
 // acts that must play to their end (their onEnd moves her on): nothing is played over them
-const MUST_FINISH = new Set(['exit0', 'land', 'segfault', 'teleportOut', 'teleportIn', 'suspend', 'resume', 'bootWave']);
+const MUST_FINISH = new Set(['exit0', 'land', 'segfault', 'teleportOut', 'teleportIn', 'suspend', 'resume', 'bootWave', 'sprawl']);
+// thrown: released faster than this (px/s) she flies; three throws this close together and she's mad
+const THROW_V = 900;
+const THROW_MAX = 4000;
+const MAD_WINDOW = 20000;
+const MAD_LOCK = 15000;
 
 export class Hexa {
   constructor({ rig, player, fx, voice, area, size, scale = 1, rand = Math.random, now = Date.now, settings = {} }) {
@@ -88,6 +93,10 @@ export class Hexa {
     this.perch = null;                  // { id, dx }: the window she sits on
     this.pointing = null;               // { rect, aim, side, label, wire } while she points at something
     this.celebrating = null;            // resolves a victory in progress
+    this.flight = null;                 // while she's thrown: flightStep state
+    this.throws = [];                   // when you last threw her
+    this.grabLockUntil = 0;             // mad: no picking her up until then
+    this.madPending = false;
     this.onBackground = null;           // (inBackground) => void: tells the main process (config, tray)
     player.stance('stand');
     this.solve(0);
@@ -685,8 +694,10 @@ export class Hexa {
   onDragStart(p) {
     if (this.mode === 'background' || this.mode === 'suspend' || this.mode === 'teleport' || this.mode === 'boot') return false;
     if (!this.contains(p)) return false;
+    if (this.now() < this.grabLockUntil) return false; // still mad at you
     this.activity();
-    this.drag = { dx: this.pos.x - p.x, dy: this.pos.y - p.y, last: { ...p } };
+    this.flight = null; // caught mid-air
+    this.drag = { dx: this.pos.x - p.x, dy: this.pos.y - p.y, last: { ...p }, samples: [{ t: this.now(), x: p.x, y: p.y }] };
     this.target = null;
     this.player.stop();
     this.enterMode('drag');
@@ -698,13 +709,33 @@ export class Hexa {
     if (!this.drag) return;
     this.drag.vx = p.x - this.drag.last.x;
     this.drag.last = { ...p };
+    const now = this.now();
+    this.drag.samples.push({ t: now, x: p.x, y: p.y });
+    this.drag.samples = this.drag.samples.filter((v) => now - v.t <= 100);
     this.pos = clampInto(this.area, { x: p.x + this.drag.dx, y: p.y + this.drag.dy }, this.size);
   }
 
   onDragEnd() {
     if (!this.drag) return;
+    const samples = this.drag.samples;
     this.drag = null;
     this.activity();
+    // let go mid-swing: she flies off with it
+    const first = samples[0];
+    const last = samples[samples.length - 1];
+    const dt = (last.t - first.t) / 1000;
+    if (samples.length > 1 && dt > 0) {
+      let vx = (last.x - first.x) / dt;
+      let vy = (last.y - first.y) / dt;
+      const speed = Math.hypot(vx, vy);
+      if (speed > THROW_V) {
+        const k = Math.min(1, THROW_MAX / speed);
+        vx *= k;
+        vy *= k;
+        this.throwHer(vx, vy);
+        return;
+      }
+    }
     // let go with her hips on a window's top edge: she sits there
     const ledge = this.ledgeUnder(this.pos.x, this.pos.y - SEAT_DY * this.scale, 24);
     if (ledge) {
@@ -719,6 +750,60 @@ export class Hexa {
     } else {
       this.settleMode('idle');
       this.say('dropped');
+    }
+  }
+
+  throwHer(vx, vy) {
+    const now = this.now();
+    this.flight = { x: this.pos.x, y: this.pos.y, vx, vy, spin: vx * 0.004 };
+    this.enterMode('thrown');
+    this.player.stance('fall');
+    this.throws = this.throws.filter((t) => now - t < MAD_WINDOW);
+    this.throws.push(now);
+    if (this.throws.length >= 3) {
+      this.throws = [];
+      this.madPending = true;
+    }
+  }
+
+  // she's down (or caught): mad if you've been throwing her around
+  afterFlight() {
+    this.flight = null;
+    if (!this.madPending) return;
+    this.madPending = false;
+    this.grabLockUntil = this.now() + MAD_LOCK;
+    this.say('mad');
+    this.later(900, () => this.pointer && this.zap(this.pointer));
+  }
+
+  flightUpdate(h) {
+    const ledges = this.windows.wins.filter((w) => this.canSit(w)).map((w) => ({ id: w.id, x: w.x, y: w.y, w: w.w }));
+    const r = flightStep(this.flight, h, { area: this.area, size: this.size, ledges, hipDy: SEAT_DY * this.scale });
+    this.flight = r.state;
+    this.pos = { x: r.state.x, y: r.state.y };
+    for (const e of r.events) {
+      const b = this.body();
+      if (e.type === 'crash') {
+        const x = e.side === 'left' ? this.area.x : this.area.x + this.area.w;
+        this.fx.crack(x, b.y);
+        this.fx.shards(x, b.y, 10, { spread: 140 });
+        this.voice.play('land');
+      } else if (e.type === 'ledge' && e.caught) {
+        const win = this.windows.wins.find((w) => w.id === e.id);
+        if (win) this.perchOn(win, this.pos.x);
+        this.enterMode('idle');
+        this.player.play('land', { onCue: (c) => this.cue(c) });
+        this.say('landed');
+        this.afterFlight();
+      } else if (e.type === 'ledge') {
+        this.fx.shards(this.pos.x, this.pos.y - SEAT_DY * this.scale, 8, { spread: 120 }); // and the window shakes
+      } else if (e.type === 'floor') {
+        this.enterMode('idle');
+        if (e.upright) this.player.play('land', { onCue: (c) => this.cue(c) });
+        else this.player.play('sprawl');
+        this.say('landed');
+        this.afterFlight();
+      }
     }
   }
 
@@ -817,6 +902,26 @@ export class Hexa {
     this.player.play('suspend', { onEnd: () => { this.folding = false; } });
   }
 
+  // Her overlay just moved to another screen (she followed you there): she appears near your
+  // pointer, or in her corner.
+  arrive() {
+    if (this.mode === 'background') return;
+    this.player.stop();
+    this.teleportWatchdog = null;
+    this.tasks = [];
+    this.hidden = false;
+    this.alpha = 1;
+    this.fade = null;
+    const p = this.pointer;
+    const near = p ? { x: p.x + (p.x > this.area.x + this.area.w / 2 ? -160 : 160), y: p.y + this.size.h * 0.6 } : restSpot(this.area, this.size);
+    this.pos = clampInto(this.area, near, this.size);
+    this.resetChains();
+    this.enterMode('idle');
+    this.fx.column(this.pos.x, this.pos.y);
+    this.voice.play('teleport-in');
+    this.player.play('teleportIn', { fast: true, onEnd: () => this.settleMode('idle') });
+  }
+
   // ---- her boot ----
 
   boot() {
@@ -873,6 +978,8 @@ export class Hexa {
       this.alpha = this.fade.from + (this.fade.to - this.fade.from) * k;
       if (k >= 1) this.fade = null;
     }
+
+    if (this.mode === 'thrown' && this.flight) this.flightUpdate(h);
 
     if (this.mode === 'fall') {
       const hipBefore = this.pos.y - SEAT_DY * this.scale;
