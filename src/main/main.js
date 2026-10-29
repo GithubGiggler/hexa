@@ -56,8 +56,11 @@ try {
   // no log file: the console still works
 }
 
+let quitReason = 'a signal or the session ending';
+
 if (!app.requestSingleInstanceLock()) {
   console.log('[hexa] another Hexa is already running: this one quits');
+  quitReason = 'another Hexa is already running';
   app.quit();
 } else {
   start();
@@ -152,7 +155,7 @@ function start() {
       trayHandle?.rebuild();
     },
     quit: () => {
-      console.log('[hexa] quit from her menu');
+      quitReason = 'from her menu';
       app.quit();
     },
   };
@@ -345,12 +348,9 @@ function start() {
     }, 500);
   });
 
-  // why she stopped, for the log: her menu says so above; anything else is the system or a signal
-  app.on('before-quit', () => console.log('[hexa] quitting'));
-  process.on('SIGTERM', () => {
-    console.log('[hexa] quit by SIGTERM');
-    app.quit();
-  });
+  // why she stopped, for the log. Electron answers SIGTERM and SIGINT itself (a Node handler for
+  // them never runs), so a quit nobody asked for here is a signal or the session ending.
+  app.on('before-quit', () => console.log(`[hexa] quitting (${quitReason})`));
 
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
