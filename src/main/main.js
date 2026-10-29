@@ -23,6 +23,7 @@ const { trayLabels } = require('./labels');
 const { screen } = require('electron');
 const { playDemo } = require('./demo');
 const { startX11Windows } = require('./platform/linux/windows-x11');
+const { startKwinWindows } = require('./platform/linux/kwin');
 const { parentChain, windowForChain } = require('./platform/linux/proc');
 
 const DEV = process.argv.includes('--dev');
@@ -270,20 +271,21 @@ function start() {
     });
     console.log(`[hexa] overlay on display ${overlay.display.id} (${overlay.display.bounds.width}×${overlay.display.bounds.height}), click-through by ${overlay.mode}`);
 
-    if (x11) {
-      windows = await startX11Windows({
-        x11,
-        selfXid: overlay.xid,
-        getDisplay: () => overlay.display,
-        onUpdate: (snap) => {
-          lastWindows = snap;
-          send('windows:update', snap);
-        },
-      }).catch((err) => {
-        console.error('[hexa] window tracking unavailable:', err.message);
-        return null;
-      });
-    }
+    // where your windows are: from KWin itself on Plasma Wayland (XWayland only sees its own
+    // windows), from the X server everywhere else
+    const onUpdate = (snap) => {
+      lastWindows = snap;
+      send('windows:update', snap);
+    };
+    const plasmaWayland = Boolean(process.env.WAYLAND_DISPLAY) && /KDE/i.test(process.env.XDG_CURRENT_DESKTOP || '');
+    const startTracker = plasmaWayland
+      ? () => startKwinWindows({ getDisplay: () => overlay.display, onUpdate })
+      : x11 ? () => startX11Windows({ x11, selfXid: overlay.xid, getDisplay: () => overlay.display, onUpdate }) : null;
+    windows = startTracker ? await startTracker().catch((err) => {
+      console.error('[hexa] window tracking unavailable:', err.message);
+      return null;
+    }) : null;
+    if (windows) console.log(`[hexa] window tracking by ${plasmaWayland ? 'KWin' : 'X11'}`);
 
     try {
       bridge = await createBridge({
