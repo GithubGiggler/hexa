@@ -67,6 +67,11 @@ export class Mainframe {
       e.preventDefault();
       this.submit();
     });
+    this.stopButton = el('button', 'mf-small', 'stop');
+    this.stopButton.type = 'button';
+    this.stopButton.hidden = true;
+    this.stopButton.addEventListener('click', () => this.host.chatStop());
+    row.append(this.stopButton);
     const fresh = el('button', 'mf-small', 'new chat');
     fresh.type = 'button';
     fresh.addEventListener('click', () => {
@@ -269,6 +274,7 @@ export class Mainframe {
 
   // the chat's events from main: her reply streaming in, her actions, the end
   onChat(e) {
+    this.stopButton.hidden = !['start', 'delta', 'action'].includes(e.type);
     if (e.type === 'start') this.reply = null;
     else if (e.type === 'delta') {
       if (!this.reply) this.reply = this.line('hexa', '');

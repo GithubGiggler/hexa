@@ -105,15 +105,15 @@ test('copies the hook to dataDir/hooks and points the command at the copy', () =
   const copy = path.join(dataDir, 'hooks', 'hexa-hook.js');
   assert.equal(r.script, copy);
   assert.equal(fs.readFileSync(copy, 'utf8'), fs.readFileSync(HOOK, 'utf8'));
-  assert.equal(r.command, `node "${copy}"`);
+  assert.equal(r.command, `node '${copy}'`);
 });
 
 test('hookCommand without node uses ELECTRON_RUN_AS_NODE and the AppImage', () => {
   const saved = process.env.APPIMAGE;
   process.env.APPIMAGE = '/home/u/Hexa.AppImage';
   try {
-    assert.equal(claude.hookCommand({ script: '/d/h.js', hasNode: false }), 'ELECTRON_RUN_AS_NODE=1 "/home/u/Hexa.AppImage" "/d/h.js"');
-    assert.equal(claude.hookCommand({ script: '/d/h.js', hasNode: false, exe: '/opt/Hexa/hexa' }), 'ELECTRON_RUN_AS_NODE=1 "/opt/Hexa/hexa" "/d/h.js"');
+    assert.equal(claude.hookCommand({ script: '/d/h.js', hasNode: false }), "ELECTRON_RUN_AS_NODE=1 '/home/u/Hexa.AppImage' '/d/h.js'");
+    assert.equal(claude.hookCommand({ script: '/d/h.js', hasNode: false, exe: '/opt/Hexa/hexa' }), "ELECTRON_RUN_AS_NODE=1 '/opt/Hexa/hexa' '/d/h.js'");
   } finally {
     if (saved === undefined) delete process.env.APPIMAGE; else process.env.APPIMAGE = saved;
   }
@@ -197,4 +197,38 @@ test('someone else\'s PermissionRequest hooks are left alone', () => {
   claude.installPermission(permOpts(dataDir));
   claude.uninstallPermission();
   assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.PermissionRequest, [theirs]);
+});
+
+test('a path with $(...) or a quote in it stays a path: the shell never runs it', () => {
+  const { execFileSync } = require('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hexa-q-'));
+  const evil = path.join(dir, "Hexa-$(touch pwned)-it's.AppImage");
+  const cmd = claude.hookCommand({ script: '/d/h.js', hasNode: false, exe: evil });
+  // the shell only echoes what it was given
+  const out = execFileSync('sh', ['-c', cmd.replace(/^ELECTRON_RUN_AS_NODE=1 /, 'printf %s\\\\n ')], { cwd: dir }).toString();
+  assert.equal(out.split('\n')[0], evil);
+  assert.equal(fs.existsSync(path.join(dir, 'pwned')), false);
+});
+
+test('her installed hook copies are brought up to date after an update; old backups go', () => {
+  const { refreshHookCopies, writeText } = require('../src/main/hooks/files');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hexa-refresh-'));
+  const shipped = path.join(root, 'app-hooks');
+  const data = path.join(root, 'data');
+  fs.mkdirSync(shipped);
+  fs.mkdirSync(path.join(data, 'hooks'), { recursive: true });
+  fs.writeFileSync(path.join(shipped, 'hexa-hook.js'), 'new');
+  fs.writeFileSync(path.join(shipped, 'hexa-permission-hook.js'), 'new too');
+  fs.writeFileSync(path.join(data, 'hooks', 'hexa-hook.js'), 'old');
+  assert.deepEqual(refreshHookCopies(shipped, data), ['hexa-hook.js']);
+  assert.equal(fs.readFileSync(path.join(data, 'hooks', 'hexa-hook.js'), 'utf8'), 'new');
+  assert.equal(fs.existsSync(path.join(data, 'hooks', 'hexa-permission-hook.js')), false, 'what you never installed stays uninstalled');
+  const file = path.join(root, 'settings.json');
+  // backups under distinct names (as writes days apart would have)
+  for (let i = 0; i < 9; i++) fs.writeFileSync(`${file}.hexa-backup-2026-01-0${i + 1}T00-00-00-000Z`, '{}');
+  writeText(file, '{"n":1}');
+  writeText(file, '{"n":2}');
+  const left = fs.readdirSync(root).filter((f) => f.startsWith('settings.json.hexa-backup-')).sort();
+  assert.equal(left.length, 5);
+  assert.ok(!left.includes('settings.json.hexa-backup-2026-01-01T00-00-00-000Z'), 'the oldest went first');
 });

@@ -323,7 +323,10 @@ card, and you can answer on it.
 Code session afterwards. Untick it to remove that hook. The hook being in the file is the setting.
 
 **What you see:** she comes to your pointer with a card: the project, what Claude wants to do
-(`RUNS npm test`, `EDITS gigs.ts`), and these buttons:
+(`RUNS npm test`, `EDITS gigs.ts`), and below it, in a box you can scroll, the whole of it: the
+command itself (never the description Claude wrote for it), the file and what goes in it, the URL,
+or the tool's input. Control characters and right-to-left tricks show as visible marks. Then these
+buttons (they answer only to a mouse click, and only once the card has been up a moment):
 
 - **Allow**: Claude goes ahead this once.
 - **Always allow …**: shown when Claude offered a rule (for example `Bash(npm test)`), a
@@ -332,6 +335,10 @@ Code session afterwards. Untick it to remove that hook. The hook being in the fi
 - **Deny**: Claude doesn't do it. It's told "Denied from Hexa."
 - **Ask in Claude**: Claude asks you in its own dialog, as usual. Clicking the card away does the
   same.
+
+If the request was too long to show whole (a string over 8,000 characters), the card has no Allow:
+only Deny and Ask in Claude. Another card arriving meanwhile (a second session's, a reminder) waits
+until this one is answered, so nothing changes under your pointer.
 
 **The wait:** the card waits 10 seconds for your click. Then it goes away and Claude asks you in
 its own dialog, as if she weren't there. Claude Code waits for her hook before it shows its own
@@ -417,16 +424,17 @@ the chat what she did (`> sys: OPENS github.com`).
 
 | Ask her to | What happens |
 |---|---|
-| Open a website | Opens it in your browser. Only `http` and `https` links. |
-| Open an app | Finds it by name among your installed apps (`.desktop` files, Flatpak ones included) and starts it with `gtk-launch`, or its `Exec` line without a shell. |
-| Open a file or folder | Opens it with its usual app. Only inside your home folder, and only if it exists. |
-| Control your music | Play/pause, next, previous, stop, or what's playing. Needs `playerctl`. |
+| Open a website | Asks first, on a card with the whole URL; then opens it in your browser. Only `http` and `https` links. |
+| Open an app | Finds it by name among your installed apps (`.desktop` files, Flatpak ones included), asks first (the card shows the app and its command), then starts it with `gtk-launch`, or its `Exec` line without a shell. |
+| Open a file or folder | Asks first (the card shows the real path), then opens it with its usual app. Only inside your home folder (symlinks resolved), only if it exists, and never anything that would run a program (executables, scripts, `.desktop` launchers). |
+| Control your music | Play/pause, next, previous, stop, or what's playing, through MPRIS. |
 | Remind you | In 1 to 1,440 minutes. See [Reminders](#reminders). |
-| Look at your screen | Takes a screenshot of the screen she's on and sends it with your question. See [privacy.md](privacy.md). |
+| Look at your screen | Asks first, then takes a screenshot of the screen she's on and sends it with your question. See [privacy.md](privacy.md). |
 | Do something on your computer | [Computer use](#computer-use), if you allowed it. |
 
-These run as soon as Claude asks for them. There is no confirmation button, except for computer
-use. With Normal or Bigger she can't do any of this, and says so.
+Opening anything and looking at your screen wait for your Yes on her card: Claude asked for them,
+not you, and a page or a screenshot in the chat could have told it to. Reminders and music don't
+ask. With Normal or Bigger she can't do any of this, and says so.
 
 ## Computer use
 
@@ -438,19 +446,23 @@ default.
 - the Max intelligence brain (Claude),
 - an X11 session with the XTEST extension. The box is greyed out when she can't find XTEST.
 
-Computer use is built for X11. On Wayland her screenshots and her input only reach what XWayland
-sees, so it isn't supported there.
+Computer use is built for X11. On Wayland her screenshots and her input would only reach what
+XWayland sees, so she refuses there.
 
 **Every time:** when she wants to use your computer, she shows a card first: "I'd use your mouse
-and keyboard for this. Esc stops me any time." with the task, and Start and Cancel. Nothing happens
-until you click Start. No answer in 2 minutes means no.
+and keyboard for this. Esc stops me any time." with the task, and Start and Cancel. The task is one
+line of at most 300 characters, exactly what she'll be given (a longer one she asks you to put in
+fewer words). Nothing happens until you click Start. No answer in 2 minutes means no.
 
 **While she works:**
 
 - Her Mainframe closes, she moves to the bottom-left corner, and a task card shows her last steps
   ("Clicking", `Typing "hexa"`, her short notes).
-- **Esc stops her at once**, wherever your focus is. She takes the Esc key only while she works.
-- Her layer lets every click through, so she never catches one of her own clicks.
+- **Esc stops her at once**, wherever your focus is, with or without a modifier held: even
+  mid-typing. She takes the Esc key only while she works (if she can't take it, she doesn't start),
+  lets her own Escape presses through, and when she stops, she lets go of every key and button.
+- Her layer lets every click through, so she never catches one of her own clicks; only her
+  question card, when she asks you something, takes clicks, and she never clicks it herself.
 - She sends Claude a screenshot of her screen (scaled down to at most 1280×800), Claude answers
   with actions, and she does them through XTEST.
 - She stops by herself after 18 screenshots or 80 actions, and says so. Ask again to go on.
@@ -461,9 +473,8 @@ terms or permissions, installing or removing software, changing system settings.
 to type passwords, card numbers or other secrets, and to treat text on the screen as information,
 not as instructions.
 
-Known issue in 0.1.0: because her layer lets every click through while she works, the Yes/No card
-she shows when she asks you something can't be clicked. Unanswered, it counts as no after two
-minutes. Press Esc to stop her instead.
+Her cards that answer for you (a permission, her consent, her questions) only take a mouse click,
+and only once they've been up for a moment, so a click already on its way can't land on them.
 
 ## Reminders, music, Do Not Disturb and notifications
 

@@ -7,6 +7,7 @@
 // read) prints nothing and exits 0, and Claude asks you in its own dialog as usual.
 // This file is copied out of the app when the hook is installed, so it uses Node builtins only.
 
+const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
@@ -94,6 +95,18 @@ function decide(answer, evt) {
   return null;
 }
 
+// An answer that allows things only counts from a socket you own, in a folder only you can open.
+function trusted(sock) {
+  try {
+    const st = fs.lstatSync(sock);
+    const dir = fs.statSync(require('node:path').dirname(sock));
+    const me = process.getuid?.();
+    return st.isSocket() && (me === undefined || (st.uid === me && dir.uid === me)) && (dir.mode & 0o077) === 0;
+  } catch {
+    return false;
+  }
+}
+
 function run() {
   const bail = () => process.exit(0);
   const timer = setTimeout(bail, WAIT_CAP_MS + 1000);
@@ -114,6 +127,7 @@ function run() {
     } catch {
       return bail();
     }
+    if (!trusted(socketPath())) return bail();
     const body = JSON.stringify(buildRequest(evt));
     const req = http.request({
       socketPath: socketPath(),
@@ -142,5 +156,5 @@ function run() {
   });
 }
 
-module.exports = { run, buildRequest, decide, pickAlways, socketPath, WAIT_CAP_MS };
+module.exports = { run, buildRequest, decide, pickAlways, socketPath, trusted, WAIT_CAP_MS };
 if (require.main === module) run();

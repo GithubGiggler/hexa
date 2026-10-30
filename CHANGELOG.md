@@ -115,8 +115,5 @@ The first version: Hexa on Linux, watching Claude Code.
 
 ### Known issues
 
-- The `hexa` command in the packages starts the app, not the CLI. The CLI is `bin/hexa.js` in the
-  source tree.
-- During computer use, the card she shows when she asks you something can't be clicked. It counts
-  as no after two minutes; Esc stops her.
-- There's no setting to pick another character pack yet, and she speaks English only.
+- There's no setting to pick another character pack yet.
+- The German, French, Spanish and Japanese tables still want a native speaker's read.

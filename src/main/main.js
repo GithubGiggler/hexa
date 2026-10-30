@@ -65,6 +65,10 @@ app.setPath('sessionData', path.join(cacheBase, 'hexa', 'session')); // Chromium
 const logFile = path.join(paths.stateDir(), 'hexa.log');
 try {
   fs.mkdirSync(paths.stateDir(), { recursive: true });
+  // past 5 MB her log starts over (the last one kept as hexa.log.1)
+  try {
+    if (fs.statSync(logFile).size > 5 * 1024 * 1024) fs.renameSync(logFile, `${logFile}.1`);
+  } catch { /* no log yet */ }
   const log = fs.createWriteStream(logFile, { flags: 'a' });
   for (const level of ['log', 'warn', 'error']) {
     const original = console[level].bind(console);
@@ -400,51 +404,57 @@ function start() {
   }
 
   function registerIpc() {
-    ipcMain.handle('config:get', () => rendererConfig());
-    ipcMain.handle('overlay:area', () => overlay.area());
-    ipcMain.handle('config:set', (_e, patch) => {
+    // Only her own page may ask anything of main: her window, its top frame, at hexa://app/ (were
+    // it ever made to load anything else, nothing here would answer it).
+    const fromHer = (e) => e.sender === overlay?.win.webContents && e.senderFrame === e.sender.mainFrame
+      && String(e.senderFrame?.url || '').startsWith('hexa://app/');
+    const onHer = (channel, fn) => ipcMain.on(channel, (e, ...args) => { if (fromHer(e)) fn(e, ...args); });
+    const handleHer = (channel, fn) => ipcMain.handle(channel, (e, ...args) => (fromHer(e) ? fn(e, ...args) : null));
+    handleHer('config:get', () => rendererConfig());
+    handleHer('overlay:area', () => overlay.area());
+    handleHer('config:set', (_e, patch) => {
       // the renderer may only record what it learned, not change your settings behind your back
       const allowed = Object.fromEntries(Object.entries(patch || {}).filter(([k]) => ['welcomed', 'linked', 'visible'].includes(k)));
       return updateConfig(allowed);
     });
-    ipcMain.on('hits:set', (e, rects) => {
+    onHer('hits:set', (e, rects) => {
       if (e.sender !== overlay?.win.webContents || !Array.isArray(rects)) return;
       lastHits = rects.filter((r) => Array.isArray(r) && r.length === 4 && r.every(Number.isFinite));
       overlay.setHitRects(lastHits);
     });
     // your click on her permission card: only her own page can send it, and each id answers once
-    ipcMain.on('permission:answer', (e, answer) => {
+    onHer('permission:answer', (e, answer) => {
       if (e.sender !== overlay?.win.webContents || !answer) return;
       if (!permissions.answer(String(answer.id), String(answer.choice))) return;
       console.log(`[hexa] permission answered from her: ${answer.choice}`);
       if (answer.choice === 'allow' || answer.choice === 'always') history.approvedViaHexa();
     });
     // her own menu (a right-click on her): the tray's, as data, drawn by her
-    ipcMain.on('menu:open', () => {
+    onHer('menu:open', () => {
       shownMenu = toModel(buildMenu(trayState(), t(), actions));
       send('menu:show', { items: shownMenu.items });
       grabMenuKeys(true);
     });
-    ipcMain.on('menu:pick', (_e, id) => {
+    onHer('menu:pick', (_e, id) => {
       const menu = shownMenu;
       shownMenu = null;
       grabMenuKeys(false);
       menu?.run(id);
     });
-    ipcMain.on('menu:closed', () => {
+    onHer('menu:closed', () => {
       shownMenu = null;
       grabMenuKeys(false);
     });
-    ipcMain.handle('sounds:list', () => {
+    handleHer('sounds:list', () => {
       try {
         return fs.readdirSync(path.join(paths.dataDir(), 'sounds')).filter((f) => SOUND_FILES.test(f));
       } catch {
         return [];
       }
     });
-    ipcMain.handle('hooks:status', () => claudeHooks.status());
+    handleHer('hooks:status', () => claudeHooks.status());
     // her guide: ~/.claude in your file manager, settings.json selected when it exists
-    ipcMain.handle('guide:claudeFolder', () => {
+    handleHer('guide:claudeFolder', () => {
       const file = claudeHooks.settingsPath();
       fs.mkdirSync(path.dirname(file), { recursive: true });
       if (fs.existsSync(file)) shell.showItemInFolder(file);
@@ -453,7 +463,7 @@ function start() {
     });
     // where her tray icon is: the tray's own bounds when the desktop reports them (on KDE's
     // StatusNotifierItem it doesn't), else the panel's end of the screen, from the work area
-    ipcMain.handle('guide:tray', () => {
+    handleHer('guide:tray', () => {
       const d = overlay.display;
       const b = d.bounds;
       const wa = d.workArea;
@@ -465,14 +475,13 @@ function start() {
       return null; // no panel on this screen
     });
     // her guide is about Claude Code: its hooks, whoever she watches
-    ipcMain.handle('hooks:install', () => installHooks('claude'));
+    handleHer('hooks:install', () => installHooks('claude'));
 
     // her Mainframe (brain/hub.js); only her own page may ask
-    const fromHer = (e) => e.sender === overlay?.win.webContents;
-    ipcMain.handle('brain:status', (e) => (fromHer(e) ? hub.status() : null));
-    ipcMain.handle('brain:models', (e, tier) => (fromHer(e) ? hub.listModels(String(tier)).catch((err) => ({ error: err.message })) : null));
-    ipcMain.handle('brain:set', (e, patch) => (fromHer(e) ? hub.set(patch && typeof patch === 'object' ? patch : {}) : null));
-    ipcMain.handle('brain:key', (e, key) => {
+    handleHer('brain:status', (e) => (fromHer(e) ? hub.status() : null));
+    handleHer('brain:models', (e, tier) => (fromHer(e) ? hub.listModels(String(tier)).catch((err) => ({ error: err.message })) : null));
+    handleHer('brain:set', (e, patch) => (fromHer(e) ? hub.set(patch && typeof patch === 'object' ? patch : {}) : null));
+    handleHer('brain:key', (e, key) => {
       if (!fromHer(e)) return null;
       try {
         if (key) hub.saveKey(String(key));
@@ -482,16 +491,16 @@ function start() {
         return { ok: false, error: err.message };
       }
     });
-    ipcMain.on('chat:send', (e, text) => { if (fromHer(e)) hub.send(String(text || '')); });
-    ipcMain.on('chat:stop', (e) => { if (fromHer(e)) hub.stop(); });
-    ipcMain.on('chat:reset', (e) => { if (fromHer(e)) hub.reset(); });
+    onHer('chat:send', (e, text) => { if (fromHer(e)) hub.send(String(text || '')); });
+    onHer('chat:stop', (e) => { if (fromHer(e)) hub.stop(); });
+    onHer('chat:reset', (e) => { if (fromHer(e)) hub.reset(); });
     // your click on her consent or question card (each id answers once)
-    ipcMain.on('brain:answer', (e, a) => { if (fromHer(e) && a) hub.answer(String(a.id), String(a.value)); });
-    ipcMain.on('computer:stop', (e) => { if (fromHer(e)) hub.stopComputer(); });
+    onHer('brain:answer', (e, a) => { if (fromHer(e) && a) hub.answer(String(a.id), String(a.value)); });
+    onHer('computer:stop', (e) => { if (fromHer(e)) hub.stopComputer(); });
     // talking to her out loud: whisper.cpp on your machine (brain/voice-input.js)
     const voiceInput = createVoiceInput({ dataDir: paths.dataDir() });
-    ipcMain.handle('voice:status', (e) => (fromHer(e) ? voiceInput.available() : null));
-    ipcMain.handle('voice:transcribe', async (e, audio) => {
+    handleHer('voice:status', (e) => (fromHer(e) ? voiceInput.available() : null));
+    handleHer('voice:transcribe', async (e, audio) => {
       if (!fromHer(e)) return null;
       try {
         return { text: await voiceInput.transcribe(audio) };
@@ -502,20 +511,20 @@ function start() {
     // the keyboard, while you type to her
     // (her window is made unfocusable, and Chromium drops keys for such a window: focusable only
     // while you type to her)
-    ipcMain.handle('focus:take', async (e) => {
+    handleHer('focus:take', async (e) => {
       if (!fromHer(e) || !x11 || !overlay?.xid) return false;
       overlay.win.setFocusable(true);
       const before = await x11.takeFocus(overlay.xid);
       if (before && before !== overlay.xid) focusBefore = before;
       return true;
     });
-    ipcMain.on('focus:give', (e) => {
+    onHer('focus:give', (e) => {
       if (!fromHer(e)) return;
       overlay?.win.setFocusable(false);
       if (x11 && focusBefore) x11.giveFocus(focusBefore);
       focusBefore = 0;
     });
-    ipcMain.on('debug:state', (_e, { id, state }) => {
+    onHer('debug:state', (_e, { id, state }) => {
       const resolve = pendingState.get(id);
       if (resolve) {
         pendingState.delete(id);
@@ -531,6 +540,9 @@ function start() {
     if (!x11) console.warn('[hexa] no X11 connection: falling back to pointer polling for click-through');
     reducedMotion = await detectReducedMotion();
     registerIpc();
+    // her hook scripts you installed, brought up to date with this version of her
+    const refreshed = require('./hooks/files').refreshHookCopies(path.join(appDir, 'hooks'), paths.dataDir());
+    if (refreshed.length) console.log(`[hexa] hook scripts updated: ${refreshed.join(', ')}`);
 
     // her brain: chat, her actions, computer use (brain/hub.js)
     hub = createHub({
@@ -557,7 +569,23 @@ function start() {
         return lastHits.some(([rx, ry, rw, rh]) => cx >= rx && cy >= ry && cx < rx + rw && cy < ry + rh);
       },
       dataDir: paths.dataDir(),
-      onReminder: (text) => send('hexa:event', { hook_event_name: 'HexaReminder', text, demo: true }),
+      onReminder: (text) => {
+        send('hexa:event', { hook_event_name: 'HexaReminder', text, demo: true });
+        // in the background she can't come to you: a notification does
+        if (config.load().visible === false) notifier.notify({ title: 'Hexa: reminder', body: text, actions: [{ id: 'show', label: 'Show' }] }).catch?.(() => {});
+      },
+      // music through MPRIS (her own watcher), else playerctl
+      media: async (action) => {
+        if (!mpris) return null;
+        if (action === 'status') {
+          const m = mpris.get();
+          return m ? `${m.playing ? 'Playing' : 'Paused'}: ${[m.artist, m.title].filter(Boolean).join(' - ') || m.player}` : null;
+        }
+        const fn = { play_pause: 'playPause', next: 'next', previous: 'previous', stop: 'stop' }[action];
+        if (!fn || !mpris.get()) return null;
+        await mpris[fn]();
+        return 'OK';
+      },
       // the live checks' scripted Claude (dev mode only; tools/ isn't shipped)
       makeClaude: DEV && process.env.HEXA_FAKE_CLAUDE
         ? () => require(path.join(appDir, 'tools', 'live', 'fake-claude.js')).createFakeClaude(process.env.HEXA_FAKE_CLAUDE)
@@ -605,8 +633,15 @@ function start() {
       bridge = await createBridge({
         socketPath: paths.socketPath(),
         onEvent: (evt) => {
-          if (evt.hook_event_name === 'Stop') bond.credit('task'); // a task she watched finish
-          history.record(evt); // usage and history: counts only, never throws
+          // Hook events only: her own (Hexa…) come from inside her, never over the socket, and
+          // what main itself works out (the window, the demo flag) isn't taken from a sender
+          if (/^Hexa/.test(evt.hook_event_name)) return;
+          if (!DEV) delete evt.window_id;
+          // the demo (npm run demo) plays like the real thing, but never counts
+          if (!evt.demo) {
+            if (evt.hook_event_name === 'Stop') bond.credit('task'); // a task she watched finish
+            history.record(evt); // usage and history: counts only, never throws
+          }
           // Claude needs you: she comes to the screen you're on first
           if (evt.hook_event_name === 'Notification' && ['permission_prompt', 'elicitation_dialog', 'elicitation_url_dialog', 'agent_needs_input'].includes(evt.notification_type)) {
             moveTo(pointerDisplay().id);

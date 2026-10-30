@@ -149,6 +149,7 @@ async function createBridge({ socketPath, onEvent, onCli, onDebug, onPermission,
   fs.chmodSync(socketPath, 0o600);
 
   let remote = null;
+  if (tcp && !tcp.token) throw new Error('the TCP listener needs a token');
   if (tcp) {
     remote = http.createServer(handler({ onEvent, onCli, onDebug, token: tcp.token }));
     await listen(remote, tcp.port, '127.0.0.1');

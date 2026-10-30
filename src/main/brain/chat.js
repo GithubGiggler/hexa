@@ -54,7 +54,10 @@ function createChat({ getBrain, actions, onEvent, user, persona = () => ({ user 
         // every tool_result in one user message, matched by id
         const results = [];
         for (const call of calls) {
-          if (signal.aborted) return;
+          if (signal.aborted) {
+            onEvent({ type: 'stopped' });
+            return;
+          }
           const out = await actions.call(call.name, call.input);
           if (out.label) onEvent({ type: 'action', label: out.label });
           results.push(resultBlock(call.id, out));

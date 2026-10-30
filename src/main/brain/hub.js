@@ -144,6 +144,7 @@ function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dat
     openPath: (p) => shell.openPath(p),
     media,
     remind: (minutes, text) => {
+      if (reminders.length >= 50) throw new Error('That\'s 50 reminders already: let some go first.');
       const r = { at: Date.now() + minutes * 60000, text };
       reminders.push(r);
       saveReminders();

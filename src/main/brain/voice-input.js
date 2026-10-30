@@ -67,7 +67,8 @@ function createVoiceInput({ dataDir, env = process.env }) {
         const input = path.join(dir, 'in.webm');
         const wav = path.join(dir, 'in.wav');
         fs.writeFileSync(input, buf, { mode: 0o600 });
-        await run(f.ffmpeg, ['-nostdin', '-loglevel', 'error', '-i', input, '-ar', '16000', '-ac', '1', '-f', 'wav', wav]);
+        // WebM only, files only: nothing her page sends can make ffmpeg read anything else
+        await run(f.ffmpeg, ['-nostdin', '-loglevel', 'error', '-protocol_whitelist', 'file', '-f', 'webm', '-i', input, '-ar', '16000', '-ac', '1', '-f', 'wav', wav]);
         const out = await run(f.whisper, ['-m', f.model, '-f', wav, '-nt', '-np', '-l', lang]);
         return out.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
       } finally {

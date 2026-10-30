@@ -21,9 +21,13 @@ function nodeOnPath() {
 // With node on the machine the hook runs on it. Without, Hexa's own executable runs it as node:
 // the AppImage file itself when that's how she's installed (its mount point changes every run).
 // args: more words for the hook's command line (already safe to put there unquoted).
+// Paths go in single quotes (inside double quotes the shell still runs $(...) and `...`: an
+// AppImage downloaded as Hexa-$(...).AppImage would run on every hook).
+const sq = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
+
 function hookCommand({ script, hasNode = nodeOnPath(), exe = process.env.APPIMAGE || process.execPath, args = [] }) {
   const tail = args.length ? ` ${args.join(' ')}` : '';
-  return hasNode ? `node "${script}"${tail}` : `ELECTRON_RUN_AS_NODE=1 "${exe}" "${script}"${tail}`;
+  return hasNode ? `node ${sq(script)}${tail}` : `ELECTRON_RUN_AS_NODE=1 ${sq(exe)} ${sq(script)}${tail}`;
 }
 
 // The hook is copied to Hexa's data dir so its path never moves (AppImage mounts, app updates).
@@ -34,6 +38,26 @@ function placeHook(hookSource, dataDir, name = path.basename(hookSource)) {
   fs.copyFileSync(hookSource, script);
   fs.chmodSync(script, 0o644);
   return script;
+}
+
+// After an update: the copies of her hook scripts she installed (in dataDir/hooks) are brought up
+// to date with the ones she ships. Only copies that exist are touched; returns what was refreshed.
+function refreshHookCopies(shippedDir, dataDir) {
+  const dir = path.join(dataDir, 'hooks');
+  const done = [];
+  let names = [];
+  try { names = fs.readdirSync(dir).filter((n) => n.endsWith('.js')); } catch { return done; }
+  for (const name of names) {
+    const shipped = path.join(shippedDir, name);
+    try {
+      const fresh = fs.readFileSync(shipped);
+      if (!fresh.equals(fs.readFileSync(path.join(dir, name)))) {
+        placeHook(shipped, dataDir, name);
+        done.push(name);
+      }
+    } catch { /* not one of hers */ }
+  }
+  return done;
 }
 
 // A JSON settings file as an object: {} when it's missing or empty. Anything else we can't use
@@ -57,6 +81,17 @@ function readJson(file) {
 // Writes through a symlink (dotfiles managers keep settings in a repo) to the real file, keeps
 // its permissions (it can hold tokens), backs it up first, and swaps it in atomically.
 // A new file is readable only by you.
+// The last few backups are kept (each may hold tokens under "env"): older ones go.
+const KEEP_BACKUPS = 5;
+function pruneBackups(file) {
+  const dir = path.dirname(file);
+  const prefix = `${path.basename(file)}.hexa-backup-`;
+  try {
+    const all = fs.readdirSync(dir).filter((f) => f.startsWith(prefix)).sort();
+    for (const old of all.slice(0, Math.max(0, all.length - KEEP_BACKUPS))) fs.rmSync(path.join(dir, old), { force: true });
+  } catch { /* nothing to prune */ }
+}
+
 function writeText(file, text) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const exists = fs.existsSync(file);
@@ -67,6 +102,7 @@ function writeText(file, text) {
     const backup = `${file}.hexa-backup-${stamp}`;
     fs.copyFileSync(real, backup);
     fs.chmodSync(backup, mode);
+    pruneBackups(file);
   }
   const temp = `${real}.${process.pid}.tmp`;
   try {
@@ -83,4 +119,4 @@ function writeJson(file, value) {
   writeText(file, JSON.stringify(value, null, 2) + '\n');
 }
 
-module.exports = { nodeOnPath, hookCommand, placeHook, readJson, writeText, writeJson };
+module.exports = { nodeOnPath, hookCommand, placeHook, refreshHookCopies, readJson, writeText, writeJson };

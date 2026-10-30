@@ -8,6 +8,7 @@
 // Local brains only talk; tools (opening things, using your computer) need Claude.
 
 const http = require('node:http');
+const https = require('node:https');
 
 // where Ollama listens (OLLAMA_HOST, as Ollama itself reads it; "host:port" works too)
 function ollamaBase() {
@@ -22,7 +23,7 @@ function ollamaRequest(method, path, body, { signal, onLine } = {}) {
   const url = new URL(path, ollamaBase());
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : undefined;
-    const req = http.request(url, {
+    const req = (url.protocol === 'https:' ? https : http).request(url, {
       method,
       headers: data ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) } : {},
       signal,

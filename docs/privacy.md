@@ -152,7 +152,7 @@ All of this stays in memory.
 `~/.local/state/hexa/hexa.log` gets what she prints: which screen and window tracking she uses,
 where she listens, the paths of files she writes, errors, the button you clicked on her permission
 card (allow, always, deny, ask), and why she quit. Never event contents, chat or transcript text.
-It is never rotated: delete it whenever you like.
+Past 5 MB it starts over (the previous one is kept as `hexa.log.1`); delete them whenever you like.
 
 ## Where everything is
 

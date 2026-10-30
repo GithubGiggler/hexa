@@ -33,6 +33,9 @@ function createOverlay({ preload, url, x11, displayId = null }) {
     backgroundColor: '#00000000',
     webPreferences: { preload, contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false },
   });
+  // her page stays her page: no navigating away, no new windows (her preload's powers are for it alone)
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true);
   win.loadURL(url);

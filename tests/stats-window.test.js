@@ -169,8 +169,8 @@ test('the stats page has her strict CSP and no inline script or style', () => {
   const csp = /http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(page)?.[1];
   assert.ok(csp);
   assert.match(csp, /default-src 'none'/);
-  assert.match(csp, /script-src hexa:;/);
-  assert.match(csp, /style-src hexa:;/);
+  assert.match(csp, /script-src hexa:\/\/app;/);
+  assert.match(csp, /style-src hexa:\/\/app;/);
   assert.ok(!/unsafe-inline|unsafe-eval/.test(csp));
   assert.match(page, /<title>Hexa: usage<\/title>/);
   assert.ok(!/<script>(?!<)|<script(?![^>]*src=)[^>]*>/.test(page), 'scripts come from files');

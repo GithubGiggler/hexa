@@ -102,7 +102,7 @@ Then **plug her into Claude Code**: her menu → *Install Claude Code hooks* (or
 | Desktop session | X11 with a compositor (KDE Plasma, GNOME, Xfce, Cinnamon...), or Plasma on Wayland (she runs through XWayland and tracks windows through a KWin script) |
 | Tray | A StatusNotifierItem tray. KDE has one; GNOME needs the AppIndicator extension |
 | Claude Code | For her to watch it; she keeps you company without it |
-| Optional | Ollama (local brains), an Anthropic API key (Claude brain), whisper.cpp + ffmpeg (voice), playerctl (music) |
+| Optional | Ollama (local brains), an Anthropic API key (Claude brain), whisper.cpp + ffmpeg (voice) |
 | Computer use | An X11 session |
 
 ## Docs

@@ -64,7 +64,7 @@ test('copies its hook and the one it runs through to dataDir/hooks, and points t
   const r = codex.install(opts(dataDir));
   const copy = path.join(dataDir, 'hooks', 'hexa-codex-hook.js');
   assert.equal(r.script, copy);
-  assert.equal(r.command, `node "${copy}"`);
+  assert.equal(r.command, `node '${copy}'`);
   for (const name of ['hexa-codex-hook.js', 'hexa-hook.js']) {
     assert.equal(fs.readFileSync(path.join(dataDir, 'hooks', name), 'utf8'), fs.readFileSync(path.join(HOOKS_DIR, name), 'utf8'));
   }

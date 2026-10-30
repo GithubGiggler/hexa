@@ -42,9 +42,9 @@ test('creates ~/.gemini/config/hooks.json: one "hexa" entry, never PreToolUse, e
   assert.deepEqual(Object.keys(entry), ['SessionStart', 'PreInvocation', 'PostToolUse', 'Stop']);
   assert.equal(entry.PreToolUse, undefined, 'a PreToolUse answer must carry a decision: she never gives one');
   const script = path.join(dataDir, 'hooks', 'hexa-agy-hook.js');
-  assert.deepEqual(entry.PostToolUse, [{ matcher: '*', hooks: [{ type: 'command', command: `node "${script}" PostToolUse`, timeout: 5 }] }]);
+  assert.deepEqual(entry.PostToolUse, [{ matcher: '*', hooks: [{ type: 'command', command: `node '${script}' PostToolUse`, timeout: 5 }] }]);
   for (const event of ['SessionStart', 'PreInvocation', 'Stop']) {
-    assert.deepEqual(entry[event], [{ type: 'command', command: `node "${script}" ${event}`, timeout: 5 }]);
+    assert.deepEqual(entry[event], [{ type: 'command', command: `node '${script}' ${event}`, timeout: 5 }]);
   }
   assert.equal(r.events, 4);
   assert.equal(backups(file).length, 0);
@@ -162,5 +162,5 @@ test('without node, the AppImage runs her hook, the event still on its command l
     if (saved === undefined) delete process.env.APPIMAGE; else process.env.APPIMAGE = saved;
   }
   const script = path.join(dataDir, 'hooks', 'hexa-agy-hook.js');
-  assert.equal(read(file).hexa.Stop[0].command, `ELECTRON_RUN_AS_NODE=1 "/home/u/Hexa.AppImage" "${script}" Stop`);
+  assert.equal(read(file).hexa.Stop[0].command, `ELECTRON_RUN_AS_NODE=1 '/home/u/Hexa.AppImage' '${script}' Stop`);
 });
