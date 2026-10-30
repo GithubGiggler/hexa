@@ -306,8 +306,15 @@ test('end to end: the CLI, the real bridge and the app side', async () => {
     hooks: { status: () => ({ installed: false }) },
     stats: async ({ range }) => ({ range }),
   });
-  const bridge = await createBridge({ socketPath: socket, onEvent() {}, onCli: cli.handle });
+  const asked = [];
+  const bridge = await createBridge({ socketPath: socket, onEvent() {}, onCli: cli.handle, onPermission: async (ask) => { asked.push(ask); return null; } });
   try {
+    // every command, and the permission route is never touched
+    for (const args of [['show'], ['hide'], ['toggle'], ['demo'], ['sessions'], ['react', 'alert'], ['notify', '--title', 't'], ['hooks', 'status']]) {
+      await hexa(args, { socket });
+    }
+    assert.deepEqual(asked, []);
+    sent.length = 0;
     assert.equal((await hexa(['say', 'hello', '--face', 'heart'], { socket })).code, 0);
     assert.equal((await hexa(['run', '--', process.execPath, '-e', 'process.exit(2)'], { socket })).code, 2);
     const status = await hexa(['status', '--json'], { socket });

@@ -286,7 +286,11 @@ function start() {
     overlay.win.webContents.on('did-finish-load', push);
     startDnd({ bus: sessionBus }).then((d) => {
       dnd = d;
-      d.onChange(push);
+      doNotDisturb = d.get(); // her permission card isn't offered while it's on
+      d.onChange((on) => {
+        doNotDisturb = on;
+        push();
+      });
       push();
     }, (err) => console.warn('[hexa] Do Not Disturb unavailable:', err.message));
     startMpris({ bus: sessionBus }).then((m) => {
