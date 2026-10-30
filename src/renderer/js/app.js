@@ -14,6 +14,7 @@ import { linesFor, greetingKey } from './lines/index.js';
 import { pick, fmt } from './util.js';
 import { Guide } from './guide.js';
 import { Menu } from './menu.js';
+import { Hud, sessionRows } from './hud.js';
 
 const host = window.host;
 const HIT_EVERY_MS = 33;
@@ -47,6 +48,7 @@ const hexa = new Hexa({
 const panel = new Panel({ root: ui, voice, glyphs: pack.glyphs, palette: pack.palette });
 const menu = new Menu({ root: ui, onPick: (id) => host.menuPick(id), onClose: () => host.menuClosed() });
 let menuAt = { x: 0, y: 0 };
+const hud = new Hud({ root: ui, onPick: (id) => brain.focusSession(id) });
 host.onMenu(({ items }) => menu.show(items, menuAt, area, { x: 0, y: 0, w: innerWidth, h: innerHeight }));
 host.onMenuKey((key) => menu.key(key));
 const brain = new Brain({ hexa, panel, voice, lang: cfg.lang || 'en' });
@@ -132,6 +134,7 @@ host.answerState(() => ({
   pointing: hexa.pointing ? { id: hexa.pointing.rect.id ?? null, label: hexa.pointing.label } : null,
   hitRects: [...hexa.hitRects(), ...panel.rects()],
   menu: menu.open,
+  hud: hud.rects(),
 }));
 
 // ---- the mouse, on her ----
@@ -233,7 +236,7 @@ function frame(now) {
   }
   if (now - lastHits >= HIT_EVERY_MS) {
     lastHits = now;
-    const rects = [...body, ...panel.rects(), ...menu.rects()].map((r) => r.map((v) => Math.round(v)));
+    const rects = [...body, ...panel.rects(), ...hud.rects(), ...menu.rects()].map((r) => r.map((v) => Math.round(v)));
     const key = JSON.stringify(rects);
     if (key !== sentHits) {
       sentHits = key;
@@ -243,7 +246,10 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-setInterval(() => brain.tick(), 1000);
+setInterval(() => {
+  brain.tick();
+  hud.update(sessionRows(brain.sessions.values(), Date.now()));
+}, 1000);
 
 // ---- first light ----
 

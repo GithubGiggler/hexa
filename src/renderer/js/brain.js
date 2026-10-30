@@ -19,6 +19,8 @@ const THINK_LONG = 120000;
 // a session with no events at all for this long is gone (closed terminal, killed process): no
 // SessionEnd ever comes, so it stops counting as working
 const STALE_MS = 30 * 60 * 1000;
+// pointing at a session's window, after a click on its chip in the HUD
+const FOCUS_POINT_MS = 6000;
 // ticks come every second; a gap this long means the machine slept or the page froze
 const TICK_GAP_MS = 120000;
 const LINKED_HOLD_MS = 5000;
@@ -172,7 +174,7 @@ export class Brain {
   }
 
   onPrompt(evt, s) {
-    Object.assign(s, { taskStart: this.now(), count: 0, files: new Set(), working: true, last: null });
+    Object.assign(s, { taskStart: this.now(), count: 0, files: new Set(), working: true, last: null, error: false });
     // no process-tree match: the window in front when you send a prompt is the one you typed it in
     if (!evt.window_id) s.window = this.windows.fg || s.window || null;
     this.hexa.goToWork();
@@ -183,6 +185,7 @@ export class Brain {
   onTool(evt, s) {
     const action = { ...describeTool(evt, this.t.verbs), state: 'work' };
     s.working = true;
+    s.error = false;
     s.count += 1;
     s.last = action;
     if (EDIT_TOOLS.has(evt.tool_name)) {
@@ -205,6 +208,7 @@ export class Brain {
       this.say('info', this.line('interrupted', s), s, { face: 'wide', hold: 4000 });
       return;
     }
+    s.error = true; // for the HUD, until the next action
     // a missed Read or Edit isn't a crash: the ticker turns red, that's all; a failing command is
     if (evt.tool_name !== 'Bash') {
       this.panel.setTicker({ ...describeTool(evt, this.t.verbs), state: 'error' });
@@ -272,6 +276,21 @@ export class Brain {
     return (s && this.windows.wins.find((w) => w.id === s.window)) || null;
   }
 
+  // A chip in the HUD clicked: she points at that session's window and brings you its last
+  // answer. False when there's no such session.
+  focusSession(id) {
+    const s = this.sessions.get(id);
+    if (!s) return false;
+    const win = this.windows.wins.find((w) => w.id === s.window);
+    if (win && this.hexa.canPoint?.(win)) {
+      this.hexa.pointAt(win, { label: s.title || s.project });
+      this.pointingUntil = this.now() + FOCUS_POINT_MS;
+    }
+    const line = s.reply ? lastSentence(s.reply) : this.line(s.working ? 'working' : 'idle', s, { n: s.count });
+    this.say('done', line, s, { face: 'calm', reply: s.reply || '', hold: s.reply ? null : 5000 });
+    return true;
+  }
+
   // Back on Claude's window: the answer she was holding up for you can go.
   onWindows(snap) {
     this.windows = snap || { fg: 0, wins: [] };
@@ -285,6 +304,10 @@ export class Brain {
   async onStop(evt, s) {
     const wasWorking = s.working;
     s.working = false;
+    // for the HUD: when it finished, how long it took, and the answer, to bring you later
+    s.doneAt = this.now();
+    s.lastDuration = s.taskStart === null ? 0 : s.doneAt - s.taskStart;
+    s.reply = String(evt.last_assistant_message || '');
     this.thinking = null;
     const summary = this.summary(s);
     const quote = lastSentence(evt.last_assistant_message);
@@ -333,6 +356,10 @@ export class Brain {
   // question, a slow local model). The ticker counts so you can tell nothing froze.
   tick() {
     const now = this.now();
+    if (this.pointingUntil && now >= this.pointingUntil) {
+      this.pointingUntil = 0;
+      this.hexa.stopPointing?.();
+    }
     if (this.lastTick !== null && now - this.lastTick > TICK_GAP_MS) this.resume(); // slept: not Claude being quiet
     this.lastTick = now;
     for (const s of this.busySessions) {

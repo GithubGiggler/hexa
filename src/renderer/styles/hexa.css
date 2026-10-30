@@ -238,3 +238,72 @@ html, body {
   margin: 4px 10px;
   background: rgba(62, 242, 255, 0.22);
 }
+
+/* the sessions HUD: two or more Claude sessions, a chip each, top right */
+.hud {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: auto;
+}
+.hud-chip {
+  padding: 6px 10px 7px;
+  background: rgba(20, 26, 46, 0.88);
+  border-left: 3px solid var(--muted);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+  cursor: pointer;
+}
+.hud-chip:hover {
+  background: rgba(20, 26, 46, 0.97);
+}
+.hud-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.hud-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.hud-project {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hud-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+.hud-label {
+  margin-top: 2px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--cyan);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hud-chip.working, .hud-chip.thinking { border-left-color: var(--cyan); }
+.hud-chip.working .hud-led { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+.hud-chip.thinking .hud-led { background: var(--amber); }
+.hud-chip.thinking .hud-label { color: var(--amber); }
+.hud-chip.waiting { border-left-color: var(--magenta); }
+.hud-chip.waiting .hud-led { background: var(--magenta); box-shadow: 0 0 8px var(--magenta); }
+.hud-chip.waiting .hud-label { color: var(--magenta); }
+.hud-chip.error { border-left-color: var(--red); }
+.hud-chip.error .hud-led { background: var(--red); }
+.hud-chip.error .hud-label { color: var(--red); }
+.hud-chip.done { border-left-color: var(--green); }
+.hud-chip.done .hud-led { background: var(--green); }
+.hud-chip.done .hud-label { color: var(--green); }
+.hud-chip.idle .hud-label { color: var(--muted); }

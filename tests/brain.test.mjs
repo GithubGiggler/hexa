@@ -360,3 +360,49 @@ test('a missed Read or Edit is not a crash: no knockback, just the ticker', () =
   assert.ok(!played.includes('error'));
   assert.equal(panel.ticker.state, 'error');
 });
+
+test('the HUD gets what it needs: an error flag, when she finished, how long it took, the last answer', () => {
+  const { brain, clock } = rig();
+  clock.set(1000);
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  brain.handle(evt('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'npm test' } }));
+  brain.handle(evt('PostToolUseFailure', { tool_name: 'Bash', error: 'Error: 3 failed' }));
+  const s = brain.sessions.get('s1');
+  assert.equal(s.error, true);
+  brain.handle(evt('PreToolUse', { tool_name: 'Read', tool_input: { file_path: '/p/a.ts' } }));
+  assert.equal(s.error, false, 'it moved on');
+  clock.set(61000);
+  brain.handle(evt('Stop', { last_assistant_message: 'Fixed the three tests.' }));
+  assert.equal(s.doneAt, 61000);
+  assert.equal(s.lastDuration, 60000);
+  assert.equal(s.reply, 'Fixed the three tests.');
+});
+
+test('focusSession: she points at that session\'s window and brings its last answer', () => {
+  const { brain, hexa, said } = rig();
+  const pointed = [];
+  hexa.canPoint = () => true;
+  hexa.pointAt = (rect, opts) => { pointed.push([rect.id, opts.label]); return Promise.resolve(true); };
+  brain.onWindows({ fg: 9, wins: [{ id: 7, x: 100, y: 100, w: 800, h: 600 }, { id: 9, x: 1000, y: 100, w: 800, h: 600 }] });
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x', window_id: 7 }));
+  brain.handle(evt('Stop', { last_assistant_message: 'All done here.' }));
+  brain.focusSession('s1');
+  assert.deepEqual(pointed, [[7, 'penguin-api']]);
+  assert.equal(said.at(-1).reply, 'All done here.');
+  assert.equal(brain.focusSession('nope'), false);
+});
+
+test('pointing from the HUD stops by itself a few seconds later', () => {
+  const { brain, hexa, clock } = rig();
+  let stopped = 0;
+  hexa.canPoint = () => true;
+  hexa.pointAt = () => Promise.resolve(true);
+  hexa.stopPointing = () => { stopped++; };
+  brain.onWindows({ fg: 9, wins: [{ id: 7, x: 100, y: 100, w: 800, h: 600 }] });
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x', window_id: 7 }));
+  brain.focusSession('s1');
+  clock.set(5000); brain.tick();
+  assert.equal(stopped, 0);
+  clock.set(6500); brain.tick();
+  assert.equal(stopped, 1);
+});

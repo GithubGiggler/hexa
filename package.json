@@ -23,7 +23,8 @@
     "icons": "electron tools/make-icons.js",
     "live:m2": "tools/live/hidden-desktop.sh node tools/live/m2.js",
     "live:menu": "tools/live/hidden-desktop.sh node tools/live/menu.js",
-    "test:x": "tools/live/hidden-desktop.sh env HEXA_TEST_X=1 node --test tests/x11.test.js tests/windows-x11.test.js"
+    "test:x": "tools/live/hidden-desktop.sh env HEXA_TEST_X=1 node --test tests/x11.test.js tests/windows-x11.test.js",
+    "live:hud": "tools/live/hidden-desktop.sh node tools/live/hud.js"
   },
   "engines": {
     "node": ">=20"
