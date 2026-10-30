@@ -56,7 +56,7 @@ function createStatsWindow({ history, preload, icon, url = 'hexa://app/src/rende
     history.reloadPrices(); // your prices.json may have changed since
     win = new BrowserWindow({
       width: 780,
-      height: 680,
+      height: 700,
       minWidth: 560,
       minHeight: 480,
       title: 'Hexa: usage',

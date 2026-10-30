@@ -48,7 +48,7 @@ html, body {
 }
 
 body {
-  padding: 18px 20px 16px;
+  padding: 16px 20px 14px;
   display: flex;
   flex-direction: column;
   gap: 12px;

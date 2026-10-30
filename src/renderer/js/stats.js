@@ -46,8 +46,12 @@ const parseDate = (key) => {
 };
 
 export const dayName = (key) => parseDate(key).toLocaleDateString('en', { weekday: 'short' });
-export const longDate = (key) => parseDate(key).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-export const shortDate = (key) => parseDate(key).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+// 29 Oct: day first, and the same three-letter months everywhere
+export const shortDate = (key) => {
+  const d = parseDate(key);
+  return `${d.getDate()} ${d.toLocaleDateString('en', { month: 'short' })}`;
+};
+export const longDate = (key) => `${shortDate(key)} ${parseDate(key).getFullYear()}`;
 
 export function rangeText(view) {
   if (!view) return '';
@@ -135,7 +139,7 @@ function svg(doc, tag, attrs = {}) {
   return node;
 }
 
-const CHART = { width: 700, height: 150, left: 44, bottom: 22, top: 16 };
+const CHART = { width: 700, height: 120, left: 44, bottom: 22, top: 16 };
 
 function barChart(doc, days, metric) {
   const m = METRICS[metric];
@@ -260,7 +264,7 @@ export function mount(root, api, { win = globalThis } = {}) {
     b.type = 'button';
     b.addEventListener('click', async () => {
       saved.textContent = '';
-      const r = await api.export(format, state.range).catch(() => ({ ok: false }));
+      const r = await Promise.resolve().then(() => api.export(format, state.range)).catch(() => ({ ok: false }));
       if (r?.ok) saved.textContent = `Saved ${r.file}`;
       else if (!r?.canceled) saved.textContent = 'Could not save the file';
     });
