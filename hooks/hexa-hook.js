@@ -22,7 +22,7 @@ function socketPath() {
 
 // Fields Hexa actually uses. Everything else (file contents, tool output...) stays on your machine.
 const KEEP = [
-  'hook_event_name', 'session_id', 'cwd', 'session_title', 'permission_mode', 'transcript_path',
+  'hook_event_name', 'session_id', 'cwd', 'session_title', 'permission_mode', 'transcript_path', 'agent_transcript_path',
   'tool_name', 'tool_input', 'tool_use_id', 'duration_ms', 'error', 'is_interrupt',
   'prompt', 'message', 'title', 'notification_type', 'last_assistant_message',
   'agent_id', 'agent_type', 'source', 'reason', 'trigger',
@@ -60,12 +60,17 @@ function trim(value, depth = 0) {
 
 // Claude's answer, long enough for Hexa to show it to you when you're not on Claude's window
 const REPLY_MAX = 6000;
+const PATH_MAX = 4096;
 
 function slim(evt) {
   const out = {};
   for (const key of KEEP) if (evt[key] !== undefined) out[key] = trim(evt[key]);
   const reply = evt.last_assistant_message;
   if (typeof reply === 'string') out.last_assistant_message = cut(reply, REPLY_MAX);
+  // transcripts are where Hexa reads token counts: their paths must arrive whole
+  for (const key of ['transcript_path', 'agent_transcript_path']) {
+    if (typeof evt[key] === 'string' && evt[key].length <= PATH_MAX) out[key] = evt[key];
+  }
   // the process that ran this hook: Hexa walks up from it to find the terminal Claude lives in
   out.ppid = process.ppid;
   out.assistant = 'claude';
