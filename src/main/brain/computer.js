@@ -40,9 +40,15 @@ function describe(name, input = {}) {
   }
 }
 
-// One member of the toolset, on your screen. map: screenshot coords -> root (physical) coords.
-async function perform(name, input, { input: hands, screen, map, wait }) {
-  const at = (c) => (Array.isArray(c) && c.length === 2 && c.every(Number.isFinite) ? map(c) : null);
+// One member of the toolset, on your screen. map: screenshot coords -> root (physical) coords;
+// hersAt([x, y]): is that her own card or body? (she never clicks those: your answers are yours)
+async function perform(name, input, { input: hands, screen, map, wait, signal, hersAt = () => false }) {
+  const at = (c) => {
+    if (!(Array.isArray(c) && c.length === 2 && c.every(Number.isFinite))) return null;
+    const p = map(c);
+    if (hersAt(p)) throw new Error('That is Hexa herself or her card: not something to click.');
+    return p;
+  };
   const coord = input.coordinate !== undefined ? at(input.coordinate) : undefined;
   if (input.coordinate !== undefined && !coord) throw new Error('bad coordinate');
   const mods = typeof input.text === 'string' && name !== 'type' && name !== 'key' && name !== 'hold_key' ? input.text : '';
@@ -69,10 +75,10 @@ async function perform(name, input, { input: hands, screen, map, wait }) {
     case 'left_mouse_up': await hands.buttonUp('left'); break;
     case 'cursor_position': return { text: JSON.stringify(screen.cursor()) };
     case 'scroll': await hands.scroll(input.scroll_direction, Number(input.scroll_amount) || 3, coord, { modifiers: mods }); break;
-    case 'type': if (typeof input.text !== 'string') throw new Error('nothing to type'); await hands.type(input.text); break;
-    case 'key': await hands.key(String(input.text || ''), { repeat: Number(input.repeat) || 1 }); break;
-    case 'hold_key': await hands.key(String(input.text || ''), { holdMs: Math.min(300, Math.max(0, Number(input.duration) || 0)) * 1000 }); break;
-    case 'wait': await wait(Math.min(300, Math.max(0, Number(input.duration) || 1)) * 1000); break;
+    case 'type': if (typeof input.text !== 'string') throw new Error('nothing to type'); await hands.type(input.text, { signal }); break;
+    case 'key': await hands.key(String(input.text || ''), { repeat: Number(input.repeat) || 1, signal }); break;
+    case 'hold_key': await hands.key(String(input.text || ''), { holdMs: Math.min(5, Math.max(0, Number(input.duration) || 0)) * 1000, signal }); break;
+    case 'wait': await wait(Math.min(30, Math.max(0, Number(input.duration) || 1)) * 1000, signal); break;
     default: throw new Error(`no computer action "${name}"`);
   }
   return { text: 'OK' };
@@ -87,7 +93,13 @@ function resultFor(id, out, toolset = true) {
 
 // brain: claudeBrain; screen: { capture({ region }) -> { data, width, height }, toScreen([x, y]) -> [x, y], cursor() };
 // input: createInput(...); askUser(question) -> Promise<string>; onStep({ kind, text }).
-async function runComputerTask({ brain, model, task, screen, input, askUser, onStep = () => {}, signal, wait = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+// a wait Escape cuts short
+const pause = (ms, signal) => new Promise((resolve) => {
+  const t = setTimeout(resolve, ms);
+  signal?.addEventListener('abort', () => { clearTimeout(t); resolve(); }, { once: true });
+});
+
+async function runComputerTask({ brain, model, task, screen, input, askUser, onStep = () => {}, signal, wait = pause, hersAt, system = COMPUTER_SYSTEM }) {
   const first = await screen.capture();
   let shots = 1;
   let actions = 0;
@@ -98,11 +110,11 @@ async function runComputerTask({ brain, model, task, screen, input, askUser, onS
       { type: 'image', source: { type: 'base64', media_type: 'image/png', data: first.data } },
     ],
   }];
-  const ctx = { input, screen, map: (c) => screen.toScreen(c), wait };
+  const ctx = { input, screen, map: (c) => screen.toScreen(c), wait, signal, hersAt };
   for (;;) {
     if (signal?.aborted) return { outcome: 'stopped' };
     const r = await brain.chat({
-      model, system: COMPUTER_SYSTEM, messages, signal, effort: 'medium',
+      model, system, messages, signal, effort: 'medium',
       tools: [{ type: 'computer_toolset_20260801' }, ASK_USER],
       betas: BETAS, extra: { thinking: { type: 'adaptive', display: 'updates' } },
     });

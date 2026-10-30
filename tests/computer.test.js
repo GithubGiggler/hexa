@@ -107,3 +107,24 @@ test('her task card\'s words', () => {
   assert.equal(describe('key', { text: 'ctrl+l' }), 'Pressing ctrl+l');
   assert.equal(describe('double_click'), 'Double-clicking');
 });
+
+test('she never clicks her own card or body, and the signal reaches her typing', async () => {
+  const r = rig([
+    { content: [use('a', 'left_click', { coordinate: [10, 10] }), use('b', 'type', { text: 'x' })], stop: 'tool_use' },
+    { content: [{ type: 'text', text: 'ok' }], text: 'ok' },
+  ]);
+  const controller = new AbortController();
+  let typedWith = null;
+  r.input.type = async (text, opts) => { typedWith = opts; };
+  await runComputerTask({ brain: r.brain, model: 'm', task: 't', screen: r.screen, input: r.input, askUser: r.onAsk, signal: controller.signal, hersAt: ([x, y]) => x < 50 && y < 50 });
+  const [a, b] = r.seen[1].messages.at(-1).content;
+  assert.equal(a.is_error, true);
+  assert.match(a.content[0].text, /Hexa/);
+  assert.ok(!r.did.some((d) => d[0] === 'click'));
+  assert.equal(b.content[0].text, 'Not executed: an earlier computer action in this turn failed.');
+  assert.equal(typedWith, null);
+  const r2 = rig([{ content: [use('b', 'type', { text: 'x' })], stop: 'tool_use' }, { content: [{ type: 'text', text: 'ok' }], text: 'ok' }]);
+  r2.input.type = async (text, opts) => { typedWith = opts; };
+  await runComputerTask({ brain: r2.brain, model: 'm', task: 't', screen: r2.screen, input: r2.input, askUser: r2.onAsk, signal: controller.signal });
+  assert.equal(typedWith.signal, controller.signal);
+});

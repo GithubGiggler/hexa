@@ -57,21 +57,23 @@ const taskCard = new TaskCard({ root: ui });
 host.onChat((e) => mainframe.onChat(e));
 // her consent card before she touches your computer, and her questions while she does: your
 // click on the card answers (the panel's buttons take only real clicks)
+let askingNow = false; // her question mid-task is up: the one thing of hers you can click then
 host.onBrainAsk((q) => {
   const consent = q.kind === 'consent';
   const b = lines().buttons;
+  if (!consent) askingNow = true;
   panel.say({
-    kind: 'alert', face: 'wide', hold: null,
+    kind: 'alert', face: 'wide', hold: null, guarded: true,
     line: consent ? b.consent : q.question,
     quote: consent ? q.task : '',
     // (what's sent back to her model stays in English: it's for the model, not you)
     actions: consent ? [{ id: 'start', label: b.start, primary: true }, { id: 'cancel', label: b.cancel }] : [{ id: 'Yes, go ahead.', label: b.yes, primary: true }, { id: 'No, don\'t.', label: b.no }],
-    onAction: (value) => host.brainAnswer(q.id, value),
-    onDismiss: () => host.brainAnswer(q.id, consent ? 'cancel' : 'No, don\'t.'),
+    onAction: (value) => { askingNow = false; host.brainAnswer(q.id, value); },
+    onDismiss: () => { askingNow = false; host.brainAnswer(q.id, consent ? 'cancel' : 'No, don\'t.'); },
   });
   if (consent) voice.play('alert');
 });
-host.onBrainGone(() => panel.clearKind('alert'));
+host.onBrainGone(() => { askingNow = false; panel.clearKind('alert'); });
 let computerRunning = false;
 let keysSeen = 0; // for her debug state
 addEventListener('keydown', () => { keysSeen++; }, true);
@@ -395,7 +397,7 @@ function frame(now) {
   if (now - lastHits >= HIT_EVERY_MS) {
     lastHits = now;
     // while she uses your computer, every click goes through (she must never catch one)
-    const rects = (computerRunning ? [] : [...body, ...panel.rects(), ...hud.rects(), ...mainframe.rects(), ...menu.rects()]).map((r) => r.map((v) => Math.round(v)));
+    const rects = (computerRunning ? (askingNow ? panel.rects() : []) : [...body, ...panel.rects(), ...hud.rects(), ...mainframe.rects(), ...menu.rects()]).map((r) => r.map((v) => Math.round(v)));
     const key = JSON.stringify(rects);
     if (key !== sentHits) {
       sentHits = key;

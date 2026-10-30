@@ -17,6 +17,16 @@ const ALIASES = {
   up: 'Up', down: 'Down', left: 'Left', right: 'Right', space: 'space', minus: 'minus', plus: 'plus',
 };
 const BUTTON = { left: 1, middle: 2, right: 3, up: 4, down: 5, scrollLeft: 6, scrollRight: 7 };
+const MAX_TYPE = 2000;   // characters she types at once
+const MAX_HOLD_MS = 5000; // how long she holds a key down
+
+function stopped(signal) {
+  if (signal?.aborted) {
+    const err = new Error('stopped (Escape)');
+    err.name = 'AbortError';
+    throw err;
+  }
+}
 
 // keysym number for a key name, or null
 function keysymFor(name) {
@@ -63,12 +73,23 @@ function parseCombo(text) {
   return syms.every((s) => s !== null) ? syms : null;
 }
 
-async function createInput({ X, root, Test, call, minKeycode, maxKeycode, wait = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+// aroundEscape(fn): main's Escape grab (how you stop her) would catch her own Escape too; for it,
+// main lets go of the grab while fn presses the key.
+async function createInput({ X, root, Test, call, minKeycode, maxKeycode, wait = (ms) => new Promise((r) => setTimeout(r, ms)), aroundEscape = (fn) => fn() }) {
   const count = maxKeycode - minKeycode + 1;
   const rows = await call((cb) => X.GetKeyboardMapping(minKeycode, count, cb));
   const { map, free } = keymapFrom(rows, minKeycode);
   const shiftCode = map.get(KEYSYMS.XK_Shift_L.code)?.code;
-  const fake = (type, detail, x = 0, y = 0) => Test.FakeInput(type, detail, 0, root, x, y);
+  const keysDown = new Set();
+  const buttonsDown = new Set();
+  // every press and release goes through here, so she knows what she's holding (releaseAll)
+  const fake = (type, detail, x = 0, y = 0) => {
+    if (type === Test.KeyPress) keysDown.add(detail);
+    else if (type === Test.KeyRelease) keysDown.delete(detail);
+    else if (type === Test.ButtonPress) buttonsDown.add(detail);
+    else if (type === Test.ButtonRelease) buttonsDown.delete(detail);
+    Test.FakeInput(type, detail, 0, root, x, y);
+  };
   const sync = () => call((cb) => X.GetInputFocus(cb));
 
   const lending = new Map(); // keysym -> the spare keycode lent to it while it's down
@@ -111,6 +132,16 @@ async function createInput({ X, root, Test, call, minKeycode, maxKeycode, wait =
     },
     buttonDown(button = 'left') { fake(Test.ButtonPress, BUTTON[button]); return sync(); },
     buttonUp(button = 'left') { fake(Test.ButtonRelease, BUTTON[button]); return sync(); },
+    // stopped, or done: nothing she pressed stays down
+    async releaseAll() {
+      for (const code of [...keysDown]) fake(Test.KeyRelease, code);
+      for (const b of [...buttonsDown]) fake(Test.ButtonRelease, b);
+      for (const [sym, code] of lending) {
+        X.ChangeKeyboardMapping(code, 1, [0, 0]);
+        lending.delete(sym);
+      }
+      return sync();
+    },
     async drag(from, to, { modifiers = '' } = {}) {
       const mods = modifiers ? parseCombo(modifiers) || [] : [];
       await input.move(from[0], from[1]);
@@ -138,18 +169,26 @@ async function createInput({ X, root, Test, call, minKeycode, maxKeycode, wait =
       return sync();
     },
     // "ctrl+l", "Return", "alt+Tab"; held for holdMs when given
-    async key(combo, { repeat = 1, holdMs = 0 } = {}) {
+    async key(combo, { repeat = 1, holdMs = 0, signal } = {}) {
       const syms = parseCombo(combo);
       if (!syms) throw new Error(`not a key: "${combo}"`);
-      for (let n = 0; n < Math.min(100, Math.max(1, repeat)); n++) {
-        for (const s of syms) await pressSym(s, true);
-        if (holdMs) await wait(holdMs);
-        for (const s of [...syms].reverse()) await pressSym(s, false);
-      }
+      const press = async () => {
+        for (let n = 0; n < Math.min(100, Math.max(1, repeat)); n++) {
+          stopped(signal);
+          for (const s of syms) await pressSym(s, true);
+          if (holdMs) await wait(Math.min(MAX_HOLD_MS, holdMs));
+          for (const s of [...syms].reverse()) await pressSym(s, false);
+        }
+      };
+      if (syms.includes(KEYSYMS.XK_Escape.code)) await aroundEscape(press);
+      else await press();
       return sync();
     },
-    async type(text, { delayMs = 8 } = {}) {
-      for (const ch of String(text)) {
+    async type(text, { delayMs = 8, signal } = {}) {
+      const chars = [...String(text)];
+      if (chars.length > MAX_TYPE) throw new Error(`too much to type at once (${chars.length} characters, ${MAX_TYPE} at most)`);
+      for (const ch of chars) {
+        stopped(signal);
         const sym = charKeysym(ch);
         const key = map.get(sym);
         const shifted = key?.shift && shiftCode;

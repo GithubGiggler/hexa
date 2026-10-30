@@ -135,6 +135,7 @@ function start() {
   setInterval(() => bond.credit('minutes', 1), 60000).unref();
   setInterval(() => bond.flush(), 5 * 60000).unref();
   let focusBefore = 0; // the window that had the keyboard before you typed to her
+  let lastHits = []; // where her page takes clicks (CSS px), for computer use's hersAt
   let reducedMotion = false;
   let trayStatus = null;
   let stopDemo = null;
@@ -207,7 +208,8 @@ function start() {
   const permissions = createPermissions({
     offer: () => {
       // nor while she watches another assistant: Claude Code's prompts aren't hers to bring you then
-      if (config.load().visible === false || doNotDisturb || watched() !== 'claude') return false;
+      // nor while she's busy with your mouse and keyboard
+      if (config.load().visible === false || doNotDisturb || watched() !== 'claude' || hub?.working) return false;
       const idle = powerMonitor.getSystemIdleState(120);
       return idle !== 'idle' && idle !== 'locked';
     },
@@ -405,7 +407,11 @@ function start() {
       const allowed = Object.fromEntries(Object.entries(patch || {}).filter(([k]) => ['welcomed', 'linked', 'visible'].includes(k)));
       return updateConfig(allowed);
     });
-    ipcMain.on('hits:set', (_e, rects) => overlay?.setHitRects(rects));
+    ipcMain.on('hits:set', (e, rects) => {
+      if (e.sender !== overlay?.win.webContents || !Array.isArray(rects)) return;
+      lastHits = rects.filter((r) => Array.isArray(r) && r.length === 4 && r.every(Number.isFinite));
+      overlay.setHitRects(lastHits);
+    });
     // your click on her permission card: only her own page can send it, and each id answers once
     ipcMain.on('permission:answer', (e, answer) => {
       if (e.sender !== overlay?.win.webContents || !answer) return;
@@ -530,10 +536,25 @@ function start() {
     hub = createHub({
       config, secrets: createSecrets(), send, shell, x11, bond,
       capture: createCapture({ desktopCapturer, getDisplay: () => overlay.display, cursor: () => screen.getCursorScreenPoint() }),
-      // Escape is hers only while she has your mouse and keyboard
+      // Escape (with any modifier: she may be holding one) is hers only while she has your mouse
+      // and keyboard; no Escape, no task
       grabEscape: (stop) => {
-        globalShortcut.register('Escape', stop);
-        return () => globalShortcut.unregister('Escape');
+        const keys = ['Escape', 'Shift+Escape', 'Control+Escape', 'Alt+Escape', 'Super+Escape'];
+        const on = () => keys.filter((k) => globalShortcut.register(k, stop));
+        const off = () => keys.forEach((k) => globalShortcut.unregister(k));
+        if (!on().includes('Escape')) {
+          off();
+          return null;
+        }
+        return { pause: off, resume: on, done: off };
+      },
+      // her own card on screen (root pixels): never hers to click
+      hersAt: ([x, y]) => {
+        const d = overlay?.display;
+        if (!d) return false;
+        const cx = x / d.scaleFactor - d.bounds.x;
+        const cy = y / d.scaleFactor - d.bounds.y;
+        return lastHits.some(([rx, ry, rw, rh]) => cx >= rx && cy >= ry && cx < rx + rw && cy < ry + rh);
       },
       dataDir: paths.dataDir(),
       onReminder: (text) => send('hexa:event', { hook_event_name: 'HexaReminder', text, demo: true }),

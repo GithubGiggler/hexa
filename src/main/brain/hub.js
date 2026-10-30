@@ -14,6 +14,7 @@ const { ollama, claudeBrain, DEFAULT_CLAUDE } = require('./providers');
 const { createChat } = require('./chat');
 const { createActions } = require('./actions');
 const { runComputerTask } = require('./computer');
+const { computerSystem } = require('./persona');
 const { resolveLang } = require('../lang');
 
 const TIERS = ['normal', 'bigger', 'max'];
@@ -55,7 +56,16 @@ function playerctl(action) {
   return new Promise((resolve) => execFile('playerctl', args, { timeout: 3000 }, (err, out) => resolve(err ? null : (action === 'status' ? String(out).trim() : 'OK'))));
 }
 
-function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dataDir, onReminder, media = playerctl, makeClaude = null, bond = null }) {
+// a task as her consent card shows it and as she's given it: one line, control and bidi characters
+// gone, the same text both times
+function oneLine(text) {
+  return String(text || '').replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+const MAX_TASK = 300;
+
+// grabEscape(stop): takes the Escape key (with any modifier) for her task; null when it can't,
+// else { pause(), resume(), done() }. hersAt([x, y]): her own card or body, on screen.
+function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dataDir, onReminder, media = playerctl, makeClaude = null, bond = null, hersAt = () => false, notify = null }) {
   const asker = createAsker(send);
   let claude = null;
   let computer = null; // { controller } while she has the controls
@@ -89,26 +99,40 @@ function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dat
   }, Math.max(0, r.at - Date.now()));
   reminders.forEach(arm);
 
-  async function useComputer(task) {
+  async function useComputer(asked) {
     if (!cfg().computerUse) return { started: false, reason: 'Using the computer is off: turn on "Let her use my computer" in my Mainframe first.' };
     if (cfg().brain !== 'max') return { started: false, reason: 'Using the computer needs my Max intelligence brain (Claude).' };
-    if (!x11?.hasInput) return { started: false, reason: 'I can\'t reach your mouse and keyboard here (computer use needs an X11 session).' };
+    // on Wayland she'd only reach XWayland's windows, blind to the rest
+    if (process.env.XDG_SESSION_TYPE === 'wayland' || !x11?.hasInput) return { started: false, reason: 'Using your computer needs an X11 session.' };
     if (computer) return { started: false, reason: 'I\'m already on a task.' };
+    const task = oneLine(asked);
+    if (!task) return { started: false, reason: 'What should I do?' };
+    if (task.length > MAX_TASK) return { started: false, reason: 'Ask me in shorter words: I show you the whole task before I start, and that one doesn\'t fit.' };
     const yes = await asker.ask('consent', { task }, { otherwise: 'no' });
     if (yes !== 'start') return { started: false, reason: 'You said no, so I didn\'t touch anything.' };
     const controller = new AbortController();
+    const grab = grabEscape(() => controller.abort());
+    if (!grab) return { started: false, reason: 'I couldn\'t take the Escape key, and Escape is how you stop me, so I won\'t start.' };
     computer = { controller };
-    const hands = await x11.input();
-    const release = grabEscape(() => controller.abort());
+    let hands = null;
+    try {
+      hands = await x11.input({ aroundEscape: async (press) => { grab.pause(); try { await press(); } finally { grab.resume(); } } });
+    } catch (err) {
+      grab.done();
+      computer = null;
+      return { started: false, reason: `I can't reach your mouse and keyboard (${err.message}).` };
+    }
     send('computer:start', { task });
     const model = await picked('max');
     runComputerTask({
-      brain: claudeFor(), model, task, screen: capture, input: hands, signal: controller.signal,
-      askUser: (question) => asker.ask('question', { question }, { otherwise: 'No answer: don\'t do it.' }),
+      brain: claudeFor(), model, task, screen: capture, input: hands, signal: controller.signal, hersAt,
+      system: computerSystem(process.env.XDG_CURRENT_DESKTOP || 'Linux'),
+      askUser: (question) => asker.ask('question', { question: oneLine(question).slice(0, 500) }, { otherwise: 'No answer: don\'t do it.' }),
       onStep: (step) => send('computer:step', step),
     }).then((out) => send('computer:end', out), (err) => send('computer:end', { outcome: controller.signal.aborted ? 'stopped' : 'error', text: err.message }))
-      .finally(() => {
-        release();
+      .finally(async () => {
+        await hands?.releaseAll?.().catch(() => {}); // nothing she pressed stays down
+        grab.done();
         asker.cancelAll('Stopped.');
         computer = null;
       });
@@ -127,6 +151,9 @@ function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dat
     },
     lookAtScreen: () => capture.capture().catch(() => null),
     useComputer,
+    get working() {
+      return Boolean(computer);
+    },
   });
 
   let brainNow = { brain: ollama, model: null, key: 'none' };

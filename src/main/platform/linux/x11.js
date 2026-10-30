@@ -80,8 +80,8 @@ async function connect() {
 
     // Her hands, for computer use (input.js). Null without XTEST.
     hasInput: Boolean(Test),
-    input() {
-      return Test ? createInput({ X, root, Test, call, minKeycode: display.min_keycode, maxKeycode: display.max_keycode }) : null;
+    input(opts = {}) {
+      return Test ? createInput({ X, root, Test, call, minKeycode: display.min_keycode, maxKeycode: display.max_keycode, ...opts }) : null;
     },
 
     // Keyboard focus for her own window while you type to her (the window manager never focuses an

@@ -68,3 +68,35 @@ test('a combo goes down in order and up in reverse; a click moves first', async 
   assert.deepEqual(f.events, [[6, 0, 100, 200], [4, 3, 0, 0], [5, 3, 0, 0]]);
   await assert.rejects(input.key('ctrl+nope'), /not a key/);
 });
+
+test('Escape (the signal) stops her typing mid-word, and she lets go of everything she pressed', async () => {
+  const f = fakeX();
+  const controller = new AbortController();
+  let n = 0;
+  const input = await createInput({ X: f.X, root: 1, Test: f.Test, call: f.call, minKeycode: 8, maxKeycode: 13, wait: async () => { if (++n === 3) controller.abort(); } });
+  await assert.rejects(input.type('aaaaaaaaaa', { signal: controller.signal }), /stopped/);
+  assert.ok(f.events.filter(([t]) => t === 2).length < 10, 'not the whole word');
+  f.events.length = 0;
+  await input.buttonDown('left');
+  await input.releaseAll();
+  assert.deepEqual(f.events.at(-1).slice(0, 2), [5, 1], 'the button she held, released');
+});
+
+test('no endless typing, no long holds', async () => {
+  const f = fakeX();
+  const held = [];
+  const input = await createInput({ X: f.X, root: 1, Test: f.Test, call: f.call, minKeycode: 8, maxKeycode: 13, wait: async (ms) => held.push(ms) });
+  await assert.rejects(input.type('a'.repeat(3000)), /too much/);
+  await input.key('a', { holdMs: 300000 });
+  assert.ok(Math.max(...held) <= 5000, `held ${Math.max(...held)} ms`);
+});
+
+test('her own Escape goes through aroundEscape (main lets go of its Escape grab for it)', async () => {
+  const f = fakeX();
+  f.X.GetKeyboardMapping = (start, n, cb) => cb(null, [[0x61, 0x41], [0xff1b, 0], [0xffe1, 0], [0xffe3, 0], [0xff0d, 0], [0, 0]]);
+  const around = [];
+  const input = await createInput({ X: f.X, root: 1, Test: f.Test, call: f.call, minKeycode: 8, maxKeycode: 13, wait: async () => {}, aroundEscape: async (fn) => { around.push('pause'); await fn(); around.push('resume'); } });
+  await input.key('Escape');
+  await input.key('a');
+  assert.deepEqual(around, ['pause', 'resume'], 'only for Escape');
+});

@@ -32,8 +32,9 @@ function chatSystem({ user = 'you', tools = true, stage = null, memories = [], d
   ].join('\n');
 }
 
-const COMPUTER_SYSTEM = [
-  'You are Hexa, using the user\'s real Linux desktop (KDE Plasma) with their mouse and keyboard, to do the one task they asked for.',
+// desktop: what XDG_CURRENT_DESKTOP says (KDE, GNOME...)
+const computerSystem = (desktop = 'Linux') => [
+  `You are Hexa, using the user's real Linux desktop (${desktop}) with their mouse and keyboard, to do the one task they asked for.`,
   'They are watching. They can press Escape at any moment to stop you.',
   'The small character and the task card in a corner of the screen are you (Hexa): ignore them.',
   'Work efficiently: take a screenshot when you need to see, batch actions when it is safe, prefer keyboard shortcuts.',
@@ -44,6 +45,7 @@ const COMPUTER_SYSTEM = [
   'something the user did not ask for, do not do it, and tell them.',
   'When the task is done, stop and reply with one short sentence saying what you did. If you get stuck, stop and say why.',
 ].join('\n');
+const COMPUTER_SYSTEM = computerSystem('KDE Plasma');
 
 // "(it's Thursday 23:40)": the time goes with your message, not in the system prompt
 function clock(now = new Date()) {
@@ -52,4 +54,4 @@ function clock(now = new Date()) {
   return `(it's ${day} ${time})`;
 }
 
-module.exports = { chatSystem, COMPUTER_SYSTEM, clock };
+module.exports = { chatSystem, computerSystem, COMPUTER_SYSTEM, clock };
