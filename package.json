@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Hexa, a Linux-native desktop companion who narrates what Claude Code is doing.",
   "main": "src/main/main.js",
+  "bin": {
+    "hexa": "bin/hexa.js"
+  },
   "private": true,
   "license": "MIT",
   "keywords": [
