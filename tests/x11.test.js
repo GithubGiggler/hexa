@@ -1,11 +1,14 @@
 'use strict';
 
-// Talks to the real X server: skipped without DISPLAY. Uses an invisible input-only window.
+// Talks to an X server: only with HEXA_TEST_X=1 (npm run test:x runs it on a hidden desktop, never
+// your own screen). Uses an invisible input-only window.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { connect } = require('../src/main/platform/linux/x11');
 
-test('input shape decides who gets the click', { skip: !process.env.DISPLAY && 'no DISPLAY' }, async () => {
+const X_SKIP = !(process.env.HEXA_TEST_X && process.env.DISPLAY) && 'needs HEXA_TEST_X=1 and an X display (npm run test:x)';
+
+test('input shape decides who gets the click', { skip: X_SKIP }, async () => {
   const x11 = await connect();
   assert.ok(x11, 'connected to the X server');
   const { X, root } = x11;
@@ -38,7 +41,7 @@ test('connect() without a display gives null', async () => {
   }
 });
 
-test('hasCompositor answers a boolean', { skip: !process.env.DISPLAY && 'no DISPLAY' }, async () => {
+test('hasCompositor answers a boolean', { skip: X_SKIP }, async () => {
   const x11 = await connect();
   try {
     assert.equal(typeof await x11.hasCompositor(), 'boolean');

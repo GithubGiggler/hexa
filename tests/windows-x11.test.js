@@ -1,11 +1,14 @@
 'use strict';
 
-// Talks to the real X server and window manager: skipped without DISPLAY. Opens a small real
-// (managed) window for a couple of seconds.
+// Talks to an X server and window manager: only with HEXA_TEST_X=1 (npm run test:x runs it on a
+// hidden desktop, never your own screen). Opens a small real (managed) window for a couple of
+// seconds.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { connect } = require('../src/main/platform/linux/x11');
 const { startX11Windows } = require('../src/main/platform/linux/windows-x11');
+
+const X_SKIP = !(process.env.HEXA_TEST_X && process.env.DISPLAY) && 'needs HEXA_TEST_X=1 and an X display (npm run test:x)';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -19,7 +22,7 @@ async function until(fn, ms = 4000) {
   return null;
 }
 
-test('the tracker sees a window appear, move and go', { skip: !process.env.DISPLAY && 'no DISPLAY' }, async () => {
+test('the tracker sees a window appear, move and go', { skip: X_SKIP }, async () => {
   const x11 = await connect();
   assert.ok(x11, 'connected');
   // a second connection plays the app whose window we watch
