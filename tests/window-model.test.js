@@ -44,3 +44,20 @@ test('scale: physical pixels become DIP', () => {
   const snap = toSnapshot([{ id: 7, rect: { x: 300, y: 150, w: 900, h: 600 }, states: [], pid: 1, cls: 'x' }], { display: { x: 0, y: 0, width: 1707, height: 960 }, scale: 1.5, fg: 7 });
   assert.deepEqual([snap.wins[0].x, snap.wins[0].y, snap.wins[0].w, snap.wins[0].h], [200, 100, 600, 400]);
 });
+
+test('aiOf: the AI a window belongs to, from its title or class; nothing else gets out', () => {
+  const { aiOf } = require('../src/main/platform/linux/window-model');
+  assert.equal(aiOf('ChatGPT — Mozilla Firefox', 'firefox'), 'chatgpt');
+  assert.equal(aiOf('Google Gemini - Chromium', 'chromium'), 'gemini');
+  assert.equal(aiOf('Microsoft Copilot: Your AI companion', 'msedge'), 'copilot');
+  assert.equal(aiOf('perplexity.ai', 'firefox'), 'perplexity');
+  assert.equal(aiOf('DeepSeek - Into the Unknown', 'firefox'), 'deepseek');
+  assert.equal(aiOf('Grok / X', 'firefox'), 'grok');
+  assert.equal(aiOf('Le Chat - Mistral AI', 'firefox'), 'lechat');
+  assert.equal(aiOf('character.ai | Personalized AI', 'firefox'), 'characterai');
+  assert.equal(aiOf('codex', 'konsole'), 'codex');
+  assert.equal(aiOf('Claude', 'Claude'), 'claude');
+  assert.equal(aiOf('gigs.ts — penguin-api — Visual Studio Code', 'code'), null);
+  assert.equal(aiOf('', ''), null);
+  assert.equal(aiOf(null, undefined), null);
+});

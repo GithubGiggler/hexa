@@ -25,6 +25,7 @@ const TRAY = {
     soundsDir: 'Open custom sounds folder',
     wander: 'Wander around when idle',
     possess: 'Possess my windows',
+    jealous: 'Jealous of other AIs',
     screen: 'Screen',
     follow: 'Follow me across screens',
     startup: 'Start at login',

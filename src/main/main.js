@@ -23,6 +23,7 @@ const { createSecrets } = require('./secrets');
 const { createCapture } = require('./platform/linux/capture');
 const { createVoiceInput } = require('./brain/voice-input');
 const { startSense } = require('./platform/linux/sense');
+const { createBond } = require('./bond');
 const { registerPrivileged, registerHexaProtocol } = require('./protocol');
 const { buildMenu, toModel, createTray } = require('./tray');
 const { trayLabels } = require('./labels');
@@ -102,6 +103,18 @@ function start() {
   }
   let x11 = null;
   let hub = null;
+  // how close you two are (bond.js): a new stage brings her forks out
+  const bond = createBond({
+    file: path.join(paths.dataDir(), 'bond.json'),
+    onStage: (st) => {
+      send('hexa:event', { hook_event_name: 'HexaBond', up: true, stage: st.name, index: st.index, demo: true });
+      pushBond();
+      trayHandle?.rebuild();
+    },
+  });
+  const pushBond = () => send('bond:state', { ...bond.stage(), points: bond.points(), days: bond.days() });
+  setInterval(() => bond.credit('minutes', 1), 60000).unref();
+  setInterval(() => bond.flush(), 5 * 60000).unref();
   let focusBefore = 0; // the window that had the keyboard before you typed to her
   let reducedMotion = false;
   let trayStatus = null;
@@ -151,7 +164,7 @@ function start() {
   function trayState() {
     const cfg = config.load();
     const displays = screen.getAllDisplays().map((d, i) => ({ id: d.id, label: `Screen ${i + 1} (${d.bounds.width}×${d.bounds.height})`, current: d.id === overlay?.display.id }));
-    return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, possess: cfg.possess, follow: cfg.follow, displays, startAtLogin: autostart.isEnabled(), hooks: claudeHooks.status(), status: trayStatus };
+    return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, possess: cfg.possess, jealous: cfg.jealous, follow: cfg.follow, displays, startAtLogin: autostart.isEnabled(), hooks: claudeHooks.status(), status: trayStatus || `Hexa · ${bond.stage().name}` };
   }
 
   // Answering permissions from her (opt-in; permissions.js). She doesn't offer when she's in the
@@ -194,6 +207,7 @@ function start() {
     },
     wander: (wander) => updateConfig({ wander }),
     possess: (possess) => updateConfig({ possess }),
+    jealous: (jealous) => updateConfig({ jealous }),
     follow: (follow) => updateConfig({ follow }),
     screen: (id) => {
       config.save({ displayId: id });
@@ -475,7 +489,7 @@ function start() {
 
     // her brain: chat, her actions, computer use (brain/hub.js)
     hub = createHub({
-      config, secrets: createSecrets(), send, shell, x11,
+      config, secrets: createSecrets(), send, shell, x11, bond,
       capture: createCapture({ desktopCapturer, getDisplay: () => overlay.display, cursor: () => screen.getCursorScreenPoint() }),
       // Escape is hers only while she has your mouse and keyboard
       grabEscape: (stop) => {
@@ -531,6 +545,7 @@ function start() {
       bridge = await createBridge({
         socketPath: paths.socketPath(),
         onEvent: (evt) => {
+          if (evt.hook_event_name === 'Stop') bond.credit('task'); // a task she watched finish
           history.record(evt); // usage and history: counts only, never throws
           // Claude needs you: she comes to the screen you're on first
           if (evt.hook_event_name === 'Notification' && ['permission_prompt', 'elicitation_dialog', 'elicitation_url_dialog', 'agent_needs_input'].includes(evt.notification_type)) {
@@ -565,6 +580,13 @@ function start() {
 
     if (!globalShortcut.register(cfg.shortcut, actions.toggle)) console.warn(`[hexa] could not register ${cfg.shortcut}`);
     powerMonitor.on('resume', () => send('hexa:command', { name: 'resume' }));
+    // back at the computer: once you're close, she's glad
+    const back = () => {
+      if (bond.stage().index >= 2) send('hexa:event', { hook_event_name: 'HexaBond', back: true, stage: bond.stage().name, index: bond.stage().index, demo: true });
+    };
+    powerMonitor.on('unlock-screen', back);
+    powerMonitor.on('resume', back);
+    overlay.win.webContents.on('did-finish-load', pushBond);
 
     // your pointer on another screen for 3 s: she follows you there
     let awaySince = null;
@@ -592,6 +614,7 @@ function start() {
 
   app.on('will-quit', () => {
     history.flush(); // usage and history: the last few seconds of counts
+    bond.flush();
     globalShortcut.unregisterAll();
     bridge?.close();
     windows?.stop();

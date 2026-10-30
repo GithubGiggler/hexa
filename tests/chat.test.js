@@ -109,3 +109,18 @@ test('reminders and media are checked before they run', async () => {
   assert.ok((await a.call('media', { action: 'rm -rf' })).error);
   assert.ok((await a.call('nope', {})).error);
 });
+
+test('who she is stays the same for a whole conversation (no prefix edits), and is read anew for the next', async () => {
+  const s = scripted('claude', [{ text: 'a' }, { text: 'b' }, { text: 'c' }]);
+  const systems = [];
+  s.brain.chat = async (req) => { systems.push(req.system); return { content: 'x', text: 'x', stopReason: 'end_turn' }; };
+  let stage = 'Handshake';
+  const chat = createChat({ getBrain: () => ({ brain: s.brain, model: 'm', key: 'k' }), actions: createActions({}), onEvent: () => {}, persona: () => ({ user: 'you', stage: { name: stage, index: 1 } }) });
+  await chat.send('one');
+  stage = 'Connected';
+  await chat.send('two');
+  assert.equal(systems[0], systems[1]);
+  chat.reset();
+  await chat.send('three');
+  assert.match(systems[2], /Connected/);
+});

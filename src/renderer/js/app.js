@@ -174,6 +174,18 @@ host.onEvent((evt) => {
     }
     return undefined;
   }
+  // your bond: a new stage (her forks come out to see you), or you're back
+  if (evt.hook_event_name === 'HexaBond') {
+    const t = lines();
+    if (evt.up) {
+      hexa.fork();
+      panel.say({ kind: 'done', line: fmt(pick(t.bondUp), { ...vars, stage: evt.stage }), face: 'laugh', hold: 7000 });
+    } else if (evt.back && !linux.dnd) {
+      hexa.wake();
+      panel.say({ kind: 'info', line: pick(t.welcomeBack), face: 'smug', hold: 4000 });
+    }
+    return undefined;
+  }
   // her machine in trouble (main: sense.js); quiet under Do Not Disturb
   if (evt.hook_event_name === 'HexaSense') {
     if (linux.dnd) return undefined;
@@ -215,6 +227,23 @@ const applySettings = () => {
   hexa.setSettings({ wander: cfg.wander && !linux.dnd, possess: cfg.possess && !linux.dnd, motion: cfg.motion, reducedMotion: cfg.reducedMotion });
   brain.quiet = linux.dnd;
 };
+// how close you two are (main: bond.js)
+let bondState = { index: 0, name: 'Unknown host' };
+host.onBond((b) => { bondState = b || bondState; });
+const AI_NAMES = { chatgpt: 'ChatGPT', gemini: 'Gemini', copilot: 'Copilot', perplexity: 'Perplexity', deepseek: 'DeepSeek', grok: 'Grok', lechat: 'Le Chat', characterai: 'Character.AI', metaai: 'Meta AI', codex: 'Codex', claude: 'Claude' };
+// another AI in front for a while: once you're close (Trusted), she goes and sits on it, glaring
+brain.onJealous = (key) => {
+  const t = lines();
+  const ai = AI_NAMES[key] || key;
+  if (bondState.index >= 3) {
+    const seat = hexa.pickSeat({ frontOnly: true });
+    if (seat) hexa.sitOn(seat);
+    panel.say({ kind: 'info', line: fmt(pick(t.jealousAngry), { ...vars, ai }), face: 'angry', hold: 5000 });
+  } else {
+    panel.say({ kind: 'info', line: fmt(pick(t.jealousNotice), { ...vars, ai }), face: 'squint', hold: 4000 });
+  }
+};
+
 host.onLinuxState((state) => {
   linux = { dnd: Boolean(state?.dnd), music: state?.music || null };
   applySettings();
@@ -227,6 +256,7 @@ host.onConfig((c) => {
   hexa.setScale(c.scale);
   applySettings();
   brain.watching = c.claude;
+  brain.jealousOn = c.jealous !== false;
 });
 
 host.onPointer((p) => hexa.onPointer(p));

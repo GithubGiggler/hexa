@@ -496,3 +496,26 @@ test('a permission card that goes unanswered gives her ticker back (no WAITING l
   idle.said.at(-1).onAction('deny');
   assert.equal(idle.panel.ticker, null, 'nothing going on: no ticker');
 });
+
+test('another AI in front for 20 s: she notices, once in a while, and not under Do Not Disturb', () => {
+  const { brain, clock } = rig();
+  const noticed = [];
+  brain.onJealous = (ai) => noticed.push(ai);
+  brain.onWindows({ fg: 3, fgAi: 'chatgpt', wins: [] });
+  clock.set(10000); brain.tick();
+  assert.deepEqual(noticed, []);
+  clock.set(21000); brain.tick();
+  assert.deepEqual(noticed, ['chatgpt']);
+  clock.set(60000); brain.tick();
+  assert.deepEqual(noticed, ['chatgpt'], 'not again soon');
+  brain.onWindows({ fg: 4, fgAi: 'claude', wins: [] }); // the one she watches isn't a rival
+  clock.set(15 * 60000); brain.tick();
+  assert.deepEqual(noticed, ['chatgpt']);
+  const quiet = rig();
+  quiet.brain.quiet = true;
+  const n2 = [];
+  quiet.brain.onJealous = (ai) => n2.push(ai);
+  quiet.brain.onWindows({ fg: 3, fgAi: 'gemini', wins: [] });
+  quiet.clock.set(30000); quiet.brain.tick();
+  assert.deepEqual(n2, []);
+});

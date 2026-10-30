@@ -29,6 +29,9 @@ const DEFAULTS = {
   brain: 'normal',     // her brain when you talk to her: 'normal' / 'bigger' (local, Ollama) or 'max' (Claude)
   brainModels: {},     // the model picked for each brain; unset: the smallest / biggest local one, Claude Opus 5.5
   computerUse: false,  // she may use your mouse and keyboard for a task you ask (Claude only, asks first every time)
+  userName: '',        // what she calls you ("call me …" in her chat)
+  memories: [],        // what you asked her to remember ("remember that …"), at most 30
+  jealous: true,       // she notices when the window in front is another AI
 };
 
 let cache = null;

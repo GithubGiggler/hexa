@@ -10,14 +10,16 @@ const { chatSystem, clock } = require('./persona');
 const MAX_ROUNDS = 6;
 const MAX_TURNS = 60; // past this, a fresh conversation (her history isn't trimmed: append-only)
 
-function createChat({ getBrain, actions, onEvent, user }) {
+function createChat({ getBrain, actions, onEvent, user, persona = () => ({ user }) }) {
   let history = [];
   let brainKey = null;
   let controller = null;
+  let system = null; // who she is, fixed for the length of a conversation (no prefix edits)
 
   const reset = () => {
     controller?.abort();
     history = [];
+    system = null;
   };
 
   async function send(text) {
@@ -26,13 +28,14 @@ function createChat({ getBrain, actions, onEvent, user }) {
     const { brain, model, key } = getBrain();
     if (key !== brainKey || history.length >= MAX_TURNS * 2) {
       history = [];
+      system = null;
       brainKey = key;
     }
     controller?.abort();
     controller = new AbortController();
     const { signal } = controller;
     const withTools = brain.name === 'claude';
-    const system = chatSystem({ user, tools: withTools });
+    if (!history.length || !system) system = chatSystem({ ...persona(), tools: withTools });
     history.push({ role: 'user', content: withTools ? [{ type: 'text', text: `${clock()} ${message}` }] : `${clock()} ${message}` });
     onEvent({ type: 'start' });
     try {

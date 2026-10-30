@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('host', {
   onWindows: on('windows:update'),
   // { dnd: bool, music: { playing, player, title, artist } | null } whenever either changes
   onLinuxState: on('linux:state'),
+  onBond: on('bond:state'),
   getConfig: () => ipcRenderer.invoke('config:get'),
   getArea: () => ipcRenderer.invoke('overlay:area'),
   setConfig: (patch) => ipcRenderer.invoke('config:set', patch),

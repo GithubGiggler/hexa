@@ -6,7 +6,7 @@ import { linesFor, LANGS } from '../src/renderer/js/lines/index.js';
 const REQUIRED = ['boot', 'online', 'hello', 'resume', 'prompt', 'working', 'thinkSay', 'thinkLong', 'alert', 'alertHere',
   'error', 'done', 'doneQuiet', 'stopFailure', 'interrupted', 'compact', 'subagentStart', 'subagentStop', 'sessionEnd',
   'linked', 'idle', 'poke', 'pokeIdle', 'dragged', 'dropped', 'landed', 'peekShy', 'zap', 'sleepy', 'wake', 'background', 'back'];
-const PLACEHOLDERS = ['project', 'name', 'n', 'time', 'files', 'user'];
+const PLACEHOLDERS = ['project', 'name', 'n', 'time', 'files', 'user', 'stage', 'ai'];
 
 test('every required key is there', () => {
   for (const key of REQUIRED) assert.ok(key in LINES, key);

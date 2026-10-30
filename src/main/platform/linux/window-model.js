@@ -62,4 +62,29 @@ function toSnapshot(list, { display, scale = 1, fg = 0 }) {
   return { fg, wins };
 }
 
-module.exports = { frameRect, isTrackable, toSnapshot, SKIP_TYPES, ALL_DESKTOPS };
+// The other AIs she gets jealous of, by what their windows are called. Only the key ever leaves the
+// window tracker: the title itself is read for the window in front only, and dropped right away.
+const AIS = [
+  ['chatgpt', /\bchatgpt\b|chat\.openai\.com/i],
+  ['gemini', /\bgemini\b/i],
+  ['copilot', /\bcopilot\b/i],
+  ['perplexity', /\bperplexity\b/i],
+  ['deepseek', /\bdeepseek\b/i],
+  ['grok', /\bgrok\b/i],
+  ['lechat', /\ble chat\b|chat\.mistral\.ai/i],
+  ['characterai', /character\.ai/i],
+  ['metaai', /\bmeta ai\b/i],
+  ['codex', /^codex\b|\bcodex cli\b/i],
+  ['claude', /^claude\b|\bclaude\.ai\b/i],
+];
+
+function aiOf(title, cls) {
+  const text = `${title || ''}\n${cls || ''}`;
+  if (!text.trim()) return null;
+  for (const [key, re] of AIS) {
+    if (re.test(String(title || '')) || re.test(String(cls || ''))) return key;
+  }
+  return null;
+}
+
+module.exports = { frameRect, isTrackable, toSnapshot, aiOf, SKIP_TYPES, ALL_DESKTOPS };

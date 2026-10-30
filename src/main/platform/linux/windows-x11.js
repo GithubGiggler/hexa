@@ -2,16 +2,17 @@
 
 // Where your windows are, on X11: the window manager's stacking list on the root window, each
 // window's frame, state, desktop and process, kept up to date from X events (no polling).
-// Window titles are not read. Snapshots go out at most every 33 ms, however fast windows move.
+// Titles: only the window in front's, only to tell whether it's another AI (aiOf: only that key
+// goes out). Snapshots go out at most every 33 ms, however fast windows move.
 
-const { frameRect, isTrackable, toSnapshot } = require('./window-model');
+const { frameRect, isTrackable, toSnapshot, aiOf } = require('./window-model');
 
 const EMIT_MS = 33;
 const PROPERTY_CHANGE = 0x400000;
 const STRUCTURE_NOTIFY = 0x20000;
 const ATOMS = [
   '_NET_CLIENT_LIST_STACKING', '_NET_ACTIVE_WINDOW', '_NET_CURRENT_DESKTOP', '_NET_WM_WINDOW_TYPE', '_NET_WM_STATE',
-  '_NET_WM_DESKTOP', '_NET_FRAME_EXTENTS', '_GTK_FRAME_EXTENTS', '_NET_WM_PID', 'WM_CLASS',
+  '_NET_WM_DESKTOP', '_NET_FRAME_EXTENTS', '_GTK_FRAME_EXTENTS', '_NET_WM_PID', 'WM_CLASS', '_NET_WM_NAME',
 ];
 
 const call = (fn) => new Promise((resolve, reject) => fn((err, value) => (err ? reject(err) : resolve(value))));
@@ -40,6 +41,7 @@ async function startX11Windows({ x11, selfXid = 0, getDisplay, onUpdate }) {
   const wins = new Map();  // id → { id, client, frame, gtk, types, states, desktop, pid, cls }
   let order = [];          // bottom to top
   let fg = 0;
+  let fgAi = null; // which other AI the window in front is, if one
   let currentDesktop;
   let last = { fg: 0, wins: [] };
   let timer = null;
@@ -81,6 +83,16 @@ async function startX11Windows({ x11, selfXid = 0, getDisplay, onUpdate }) {
     currentDesktop = cards(desk)[0];
     for (const id of [...wins.keys()]) if (!order.includes(id)) wins.delete(id);
     await Promise.all(order.filter((id) => !wins.has(id)).map(load));
+    await readFgAi();
+  }
+
+  async function readFgAi() {
+    if (!fg) {
+      fgAi = null;
+      return;
+    }
+    const p = await prop(fg, A._NET_WM_NAME, 128);
+    fgAi = aiOf(p?.data ? p.data.toString('utf8') : '', wins.get(fg)?.cls);
   }
 
   function emit() {
@@ -91,7 +103,7 @@ async function startX11Windows({ x11, selfXid = 0, getDisplay, onUpdate }) {
       .map((id) => wins.get(id))
       .filter((w) => w && w.client && isTrackable({ ...w, currentDesktop, isSelf: w.id === selfXid }))
       .map((w) => ({ id: w.id, rect: frameRect(w.client, w.frame, w.gtk), states: w.states, pid: w.pid, cls: w.cls }));
-    last = toSnapshot(list, { display: d.bounds, scale: d.scaleFactor || 1, fg });
+    last = { ...toSnapshot(list, { display: d.bounds, scale: d.scaleFactor || 1, fg }), fgAi };
     onUpdate(last);
   }
   const schedule = () => {
@@ -115,6 +127,7 @@ async function startX11Windows({ x11, selfXid = 0, getDisplay, onUpdate }) {
         else if (ev.atom === A._NET_WM_DESKTOP) w.desktop = cards(await prop(ev.wid, A._NET_WM_DESKTOP))[0];
         else if (ev.atom === A._NET_FRAME_EXTENTS) w.frame = extents(await prop(ev.wid, A._NET_FRAME_EXTENTS));
         else if (ev.atom === A._GTK_FRAME_EXTENTS) w.gtk = extents(await prop(ev.wid, A._GTK_FRAME_EXTENTS));
+        else if (ev.atom === A._NET_WM_NAME && ev.wid === fg) await readFgAi(); // a browser tab switched
         else return;
         schedule();
       } else if (ev.name === 'ConfigureNotify') {

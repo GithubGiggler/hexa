@@ -53,5 +53,6 @@ test('defaults are the M1 set', () => {
     configVersion: 1, scale: 1, muted: false, volume: 0.7, lang: 'auto', displayId: null, follow: true, wander: true, possess: true,
     visible: true, welcomed: false, linked: false, claude: true, motion: 'auto', shortcut: 'Ctrl+Alt+H',
     startAtLogin: false, tcp: false, permissionWait: 10, brain: 'normal', brainModels: {}, computerUse: false,
+    userName: '', memories: [], jealous: true,
   });
 });

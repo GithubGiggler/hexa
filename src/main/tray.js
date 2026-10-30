@@ -51,6 +51,7 @@ function buildMenu(state, t, act) {
     },
     { label: t.wander, type: 'checkbox', checked: Boolean(state.wander), click: () => act.wander(!state.wander) },
     { label: t.possess, type: 'checkbox', checked: state.possess !== false, click: () => act.possess(state.possess === false) },
+    { label: t.jealous, type: 'checkbox', checked: state.jealous !== false, click: () => act.jealous(state.jealous === false) },
     { label: t.startup, type: 'checkbox', checked: Boolean(state.startAtLogin), click: () => act.startup(!state.startAtLogin) },
     sep,
     ...hookItems,

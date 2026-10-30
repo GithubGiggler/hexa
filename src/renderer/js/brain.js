@@ -21,6 +21,9 @@ const THINK_LONG = 120000;
 const STALE_MS = 30 * 60 * 1000;
 // pointing at a session's window, after a click on its chip in the HUD
 const FOCUS_POINT_MS = 6000;
+// another AI's window in front: she notices after this long, and at most this often
+const JEALOUS_AFTER_MS = 20000;
+const JEALOUS_EVERY_MS = 10 * 60 * 1000;
 // ticks come every second; a gap this long means the machine slept or the page froze
 const TICK_GAP_MS = 120000;
 const LINKED_HOLD_MS = 5000;
@@ -353,9 +356,12 @@ export class Brain {
     return true;
   }
 
-  // Back on Claude's window: the answer she was holding up for you can go.
+  // Back on Claude's window: the answer she was holding up for you can go. And: is the window in
+  // front another AI? (jealousy, in tick())
   onWindows(snap) {
     this.windows = snap || { fg: 0, wins: [] };
+    const ai = this.windows.fgAi && this.windows.fgAi !== this.assistant ? this.windows.fgAi : null;
+    if (ai !== this.jealous?.ai) this.jealous = ai ? { ai, since: this.now() } : null;
     const s = this.replyFor;
     if (s && this.windows.fg === s.window) {
       this.replyFor = null;
@@ -419,6 +425,12 @@ export class Brain {
   // question, a slow local model). The ticker counts so you can tell nothing froze.
   tick() {
     const now = this.now();
+    // another AI in front for a while: she notices (once in a while, never quietly)
+    if (this.jealous && !this.quiet && this.jealousOn !== false && now - this.jealous.since > JEALOUS_AFTER_MS
+      && (this.lastJealous === undefined || now - this.lastJealous > JEALOUS_EVERY_MS)) {
+      this.lastJealous = now;
+      this.onJealous?.(this.jealous.ai);
+    }
     if (this.pointingUntil && now >= this.pointingUntil) {
       this.pointingUntil = 0;
       this.hexa.stopPointing?.();

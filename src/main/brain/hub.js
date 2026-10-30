@@ -54,7 +54,7 @@ function playerctl(action) {
   return new Promise((resolve) => execFile('playerctl', args, { timeout: 3000 }, (err, out) => resolve(err ? null : (action === 'status' ? String(out).trim() : 'OK'))));
 }
 
-function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dataDir, onReminder, media = playerctl, makeClaude = null }) {
+function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dataDir, onReminder, media = playerctl, makeClaude = null, bond = null }) {
   const asker = createAsker(send);
   let claude = null;
   let computer = null; // { controller } while she has the controls
@@ -133,7 +133,41 @@ function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dat
     getBrain: () => brainNow,
     actions,
     onEvent: (e) => send('chat:event', e),
+    // who she is to you: what she calls you, what you asked her to remember, how close you are
+    persona: () => ({ user: cfg().userName || 'you', memories: cfg().memories || [], stage: bond?.stage() || null, days: bond?.days() || 0 }),
   });
+
+  // "call me …", "remember that …", "forget everything": hers to answer, no model needed. Each one
+  // starts a fresh conversation (her history is append-only, and who she is just changed).
+  const reply = (text) => {
+    send('chat:event', { type: 'start' });
+    send('chat:event', { type: 'delta', text });
+    send('chat:event', { type: 'done', text });
+  };
+  function yours(text) {
+    let m = /^\s*call me\s+(.{1,40}?)[.!]?\s*$/i.exec(text);
+    if (m) {
+      config.save({ userName: m[1] });
+      chat.reset();
+      reply(`Got it, ${m[1]}.`);
+      return true;
+    }
+    m = /^\s*remember(?:\s+that)?\s+(.{3,200}?)[.!]?\s*$/i.exec(text);
+    if (m) {
+      const list = cfg().memories || [];
+      if (!list.includes(m[1])) config.save({ memories: [...list, m[1]].slice(-30) });
+      chat.reset();
+      reply('Noted. I\'ll remember that.');
+      return true;
+    }
+    if (/^\s*forget (?:everything|it all)[.!]?\s*$/i.test(text)) {
+      config.save({ memories: [] });
+      chat.reset();
+      reply('Forgotten. Clean slate.');
+      return true;
+    }
+    return false;
+  }
 
   return {
     async status() {
@@ -158,6 +192,8 @@ function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dat
     saveKey: (key) => { secrets.save(key); claude = null; },
     clearKey: () => { secrets.clear(); claude = null; },
     async send(text) {
+      bond?.credit('chat');
+      if (yours(String(text))) return;
       const tier = cfg().brain;
       const model = await picked(tier);
       if (!model) {

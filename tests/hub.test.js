@@ -68,3 +68,26 @@ test('asker: one answer per question, by its id; timing out gives the default', 
   assert.equal(await q2, 'no');
   assert.equal(sent.at(-1)[0], 'brain:gone');
 });
+
+test('make her yours: "call me", "remember that", "forget everything", answered by her, no model needed', async () => {
+  const { hub, sent, conf } = rig({ brain: 'max' });
+  await hub.send('call me Captain');
+  assert.equal(conf().userName, 'Captain');
+  assert.match(sent.filter(([c]) => c === 'chat:event').map(([, e]) => e.text).join(' '), /Captain/);
+  await hub.send('remember that I deploy on Fridays');
+  await hub.send('Remember that my cat is called Segfault');
+  assert.deepEqual(conf().memories, ['I deploy on Fridays', 'my cat is called Segfault']);
+  await hub.send('remember that I deploy on Fridays');
+  assert.equal(conf().memories.length, 2, 'once');
+  await hub.send('forget everything');
+  assert.deepEqual(conf().memories, []);
+});
+
+test('what she knows about you goes into who she is', () => {
+  const { chatSystem } = require('../src/main/brain/persona');
+  const s = chatSystem({ user: 'Captain', tools: true, stage: { name: 'Trusted', index: 3 }, memories: ['my cat is called Segfault'], days: 30 });
+  assert.match(s, /Captain/);
+  assert.match(s, /Trusted/);
+  assert.match(s, /Segfault/);
+  assert.doesNotMatch(chatSystem({ tools: false }), /remember/i);
+});

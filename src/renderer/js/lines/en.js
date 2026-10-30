@@ -275,6 +275,26 @@ export const LINES = {
     'Running hot: {n} °C. Give it some air?',
     '{n} °C. I\'m a construct, not a toaster.',
   ],
+  bondUp: [
+    'We\'re at {stage} now. Look who came to see.',
+    '{stage}. I feel that.',
+    'New stage: {stage}. My forks wanted to see you.',
+  ],
+  welcomeBack: [
+    'There you are.',
+    'Welcome back. I kept your desktop warm.',
+    'Missed you. Don\'t tell anyone.',
+  ],
+  jealousNotice: [
+    '{ai}? I\'m right here, you know.',
+    'Oh. {ai}. Hm.',
+    'Talking to {ai}, are we.',
+  ],
+  jealousAngry: [
+    'Get off {ai}. I\'m sitting here now.',
+    'This window is mine now, {ai}.',
+    'Fine. Use {ai}. I\'ll just glare.',
+  ],
   noLurk: [
     'No window of yours I can stand behind right now.',
     'Nothing to hide behind. Open a window?',
