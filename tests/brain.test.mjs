@@ -467,3 +467,17 @@ test('with her card up, the permission Notification doesn\'t alert twice; the ca
   assert.equal(brain.sessions.get('s1').waiting, false);
   assert.ok(panel);
 });
+
+test('Do Not Disturb: Claude needing you lights her up, but she doesn\'t come or make a sound', () => {
+  const { brain, hexa, calls, played } = rig();
+  let waiting = null;
+  hexa.markWaiting = (on) => { waiting = on; };
+  brain.quiet = true;
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  brain.handle(evt('Notification', { notification_type: 'permission_prompt', message: 'Claude needs your permission' }));
+  assert.equal(waiting, true);
+  assert.ok(!has(calls, 'comeToPointer'));
+  assert.ok(!played.includes('alert'));
+  brain.handle(evt('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } }));
+  assert.equal(waiting, false, 'answered: she goes back to normal');
+});

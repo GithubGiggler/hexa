@@ -144,6 +144,7 @@ export class Brain {
     // anything happening after a permission prompt means it was answered
     if (s.waiting && name !== 'Notification') {
       s.waiting = false;
+      this.hexa.markWaiting?.(false);
       this.panel.clearKind('alert');
       if (s.pointedAt) {
         s.pointedAt = false;
@@ -227,6 +228,13 @@ export class Brain {
   onNotification(evt, s) {
     const type = evt.notification_type;
     if (ALERTS.has(type) && s.permission) return; // it's already on her card
+    if (ALERTS.has(type) && this.quiet) {
+      // Do Not Disturb: she lights up, and that's all
+      s.waiting = true;
+      this.panel.setTicker({ verb: 'WAITING', target: 'for you', state: 'waiting' });
+      this.hexa.markWaiting?.(true);
+      return;
+    }
     if (ALERTS.has(type)) {
       s.waiting = true;
       this.voice.play('alert');

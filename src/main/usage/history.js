@@ -397,6 +397,18 @@ function createHistory({
     }
   }
 
+  // You allowed a tool on her permission card: one approval, and one through Hexa.
+  function approvedViaHexa() {
+    try {
+      const d = today();
+      d.approvals.total += 1;
+      d.approvals.viaHexa += 1;
+      touch(d);
+    } catch (err) {
+      log.error(`[hexa] history: ${err.message}`);
+    }
+  }
+
   const peek = (date) => days.get(date) || loadDay(date);
 
   // A day as the stats window and the CLI see it: counts, no file hashes.
@@ -478,7 +490,7 @@ function createHistory({
     return table;
   }
 
-  return { record, summary, days: daysIn, flush, reloadPrices, dir };
+  return { record, approvedViaHexa, summary, days: daysIn, flush, reloadPrices, dir };
 }
 
 module.exports = { createHistory, rangeFor, dateKey, eachDate, emptyDay, VERSION };

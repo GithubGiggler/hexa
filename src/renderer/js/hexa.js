@@ -156,7 +156,7 @@ export class Hexa {
     this.modeSince = this.now();
     // perched on a window she stays seated while idle or working; anything else gets her up
     if (mode !== 'idle' && mode !== 'work') this.perch = null;
-    const stance = this.perch ? (this.perch.behind ? 'lurk' : 'sit') : { idle: 'stand', work: 'work', alert: 'alert', sleep: 'sleep', fall: 'fall', drag: 'dragged', peek: 'peek', point: 'stand' }[mode];
+    const stance = this.perch ? (this.perch.behind ? 'lurk' : 'sit') : { idle: this.music ? 'vibe' : 'stand', work: 'work', alert: 'alert', sleep: 'sleep', fall: 'fall', drag: 'dragged', peek: 'peek', point: 'stand' }[mode];
     if (mode !== 'point' && this.pointing) this.releasePointing();
     if (stance) this.player.stance(stance);
     if (mode !== 'peek') this.upside = false;
@@ -551,6 +551,17 @@ export class Hexa {
         });
       },
     });
+  }
+
+  // Music is playing (MPRIS): idle, she nods along.
+  setMusic(on) {
+    this.music = Boolean(on);
+    if (this.mode === 'idle' && !this.player.playing) this.enterMode('idle');
+  }
+
+  // Claude needs you but she's not to come (Do Not Disturb): her emblem turns magenta, that's all.
+  markWaiting(on) {
+    this.emblemState = on ? 'waiting' : null;
   }
 
   // ---- her Fork ----

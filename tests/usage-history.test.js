@@ -345,3 +345,11 @@ test('a history that cannot be written keeps counting, says so once, and writes 
   h.flush();
   assert.equal(readDay(dir, '2026-10-29').prompts, 2);
 });
+
+test('an approval on her permission card counts, and counts as through Hexa', () => {
+  const { h } = setup();
+  h.approvedViaHexa();
+  h.approvedViaHexa();
+  const s = h.summary();
+  assert.deepEqual(s.approvals, { total: 2, viaHexa: 2 });
+});

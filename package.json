@@ -40,7 +40,9 @@
     "dist:rpm": "electron-builder --linux rpm --x64",
     "dist:pacman": "electron-builder --linux pacman --x64",
     "dist:tar": "electron-builder --linux tar.gz --x64",
-    "dist:dir": "electron-builder --linux dir --x64"
+    "dist:dir": "electron-builder --linux dir --x64",
+    "live:cli": "tools/live/hidden-desktop.sh node tools/live/cli.js",
+    "live:all": "for c in m2 menu hud permission fork brain cli; do echo \"== $c\"; tools/live/hidden-desktop.sh node tools/live/$c.js || exit 1; done"
   },
   "engines": {
     "node": ">=22.12"

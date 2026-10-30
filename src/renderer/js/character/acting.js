@@ -79,6 +79,17 @@ export const ACTS = {
     ],
   },
 
+  // music playing (MPRIS): nodding along on the beat, hair bouncing
+  vibe: {
+    loop: true,
+    keys: [
+      [3, { bob: 0, head: 0.1, hair: -2, arms: 0.06 }],
+      [3, { bob: -3, head: -0.04, hair: 2, arms: 0.08 }],
+      [3, { bob: 0, head: 0.1, hair: -2, arms: 0.06, kickL: 0.05 }],
+      [3, { bob: -3, head: -0.04, hair: 2, arms: 0.08, kickR: 0.05 }],
+    ],
+  },
+
   // behind a window, only her head and shoulders over its top edge: hands up on the edge, watching
   lurk: {
     loop: true,

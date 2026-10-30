@@ -355,7 +355,9 @@ function start() {
     // your click on her permission card: only her own page can send it, and each id answers once
     ipcMain.on('permission:answer', (e, answer) => {
       if (e.sender !== overlay?.win.webContents || !answer) return;
-      if (permissions.answer(String(answer.id), String(answer.choice))) console.log(`[hexa] permission answered from her: ${answer.choice}`);
+      if (!permissions.answer(String(answer.id), String(answer.choice))) return;
+      console.log(`[hexa] permission answered from her: ${answer.choice}`);
+      if (answer.choice === 'allow' || answer.choice === 'always') history.approvedViaHexa();
     });
     // her own menu (a right-click on her): the tray's, as data, drawn by her
     ipcMain.on('menu:open', () => {

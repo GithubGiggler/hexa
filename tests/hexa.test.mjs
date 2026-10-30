@@ -703,3 +703,21 @@ test('coming to you, she holds still while your pointer is on her or her card (s
   advance(TELEPORT_S);
   assert.ok(Math.abs(h.pos.x - spot.x) > 300);
 });
+
+test('music playing: idle, she nods along; stopped, she stands', () => {
+  const { h, player } = make();
+  h.setMusic(true);
+  assert.equal(player.stanceName, 'vibe');
+  h.setMusic(false);
+  assert.equal(player.stanceName, 'stand');
+});
+
+test('quietly waiting (Do Not Disturb): her emblem turns magenta, she stays put', () => {
+  const { h } = make();
+  const spot = { ...h.pos };
+  h.markWaiting(true);
+  assert.equal(h.look().emblem, h.palette.magenta);
+  assert.deepEqual(h.pos, spot);
+  h.markWaiting(false);
+  assert.equal(h.look().emblem, h.palette.cyan);
+});

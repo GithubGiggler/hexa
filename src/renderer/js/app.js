@@ -137,6 +137,43 @@ host.onArea((a) => fit(a));
 
 host.onEvent((evt) => {
   if (evt.hook_event_name === 'HexaShowcase') return showcase();
+  // the hexa CLI: `hexa say`, `hexa react`, `hexa run -- <command>`
+  if (evt.hook_event_name === 'HexaSay') {
+    hexa.attend();
+    panel.say({ kind: 'info', line: String(evt.text || ''), face: evt.face || 'calm', hold: 5000 });
+    return undefined;
+  }
+  if (evt.hook_event_name === 'HexaReact') {
+    const r = evt.reaction;
+    if (r === 'done') hexa.celebrate('');
+    else if (r === 'error') { hexa.knockback(); voice.play('error'); }
+    else if (r === 'alert') { hexa.comeToPointer(); voice.play('alert'); }
+    else if (r === 'hello') { hexa.perform('wave'); hexa.onSay('hello'); }
+    else if (r === 'fork') hexa.fork();
+    return undefined;
+  }
+  if (evt.hook_event_name === 'HexaRun') {
+    const command = String(evt.command || '');
+    if (evt.phase === 'start') {
+      hexa.attend();
+      hexa.setMode('work');
+      panel.setTicker({ verb: 'RUNS', target: command.length > 40 ? `${command.slice(0, 39)}…` : command, state: 'work' });
+      return undefined;
+    }
+    panel.setTicker(null);
+    hexa.setMode('idle');
+    const secs = Math.round((evt.duration_ms || 0) / 1000);
+    if (evt.ok) {
+      voice.play('done');
+      hexa.perform('hop');
+      panel.say({ kind: 'done', line: `exit 0. ${command} took ${secs} s.`, face: 'smug', hold: 5000 });
+    } else {
+      hexa.knockback();
+      voice.play('error');
+      panel.say({ kind: 'error', line: evt.signal ? `${command} was stopped (${evt.signal}).` : `${command} exited with ${evt.code}.`, face: 'dead', hold: 7000 });
+    }
+    return undefined;
+  }
   if (evt.hook_event_name === 'HexaReminder') {
     hexa.comeToPointer();
     voice.play('alert');
@@ -158,12 +195,25 @@ host.onCommand(({ name, on }) => {
   else if (name === 'arrive') hexa.arrive();
 });
 
+// Do Not Disturb and music, from the desktop (main: dnd.js, mpris.js)
+let linux = { dnd: false, music: null };
+const applySettings = () => {
+  voice.setMuted(cfg.muted || linux.dnd);
+  // with Do Not Disturb on: no wandering off, no taking over windows
+  hexa.setSettings({ wander: cfg.wander && !linux.dnd, possess: cfg.possess && !linux.dnd, motion: cfg.motion, reducedMotion: cfg.reducedMotion });
+  brain.quiet = linux.dnd;
+};
+host.onLinuxState((state) => {
+  linux = { dnd: Boolean(state?.dnd), music: state?.music || null };
+  applySettings();
+  hexa.setMusic(Boolean(linux.music?.playing));
+});
+
 host.onConfig((c) => {
   cfg = c;
-  voice.setMuted(c.muted);
   voice.setVolume(c.volume);
   hexa.setScale(c.scale);
-  hexa.setSettings({ wander: c.wander, possess: c.possess, motion: c.motion, reducedMotion: c.reducedMotion });
+  applySettings();
   brain.watching = c.claude;
 });
 
@@ -186,6 +236,8 @@ host.answerState(() => ({
   forks: hexa.forks.length,
   buttons: panel.buttonRects(),
   mainframe: mainframe.open,
+  said: panel.current ? panel.current.line : '',
+  ticker: panel.tickerState ? `${panel.tickerState.verb} ${panel.tickerState.target}` : '',
   chat: mainframe.log.textContent.slice(-300),
   task: taskCard.box.hidden ? '' : taskCard.box.textContent,
   typing: { hasFocus: document.hasFocus(), active: document.activeElement?.className || '', value: mainframe.input.value, keys: keysSeen },
