@@ -309,6 +309,8 @@ export class Brain {
       if (answered) return;
       answered = true;
       s.permission = null;
+      s.waiting = false;
+      this.restoreTicker(s);
       this.answerPermission?.(card.id, choice);
       if (this.hexa.mode === 'alert' || this.hexa.alerting) this.hexa.setMode(s.working ? 'work' : 'idle');
     };
@@ -326,8 +328,14 @@ export class Brain {
       s.permission = null;
       s.waiting = false;
       this.panel.clearKind('alert');
+      this.restoreTicker(s);
       if (this.hexa.mode === 'alert' || this.hexa.alerting) this.hexa.setMode(s.working ? 'work' : 'idle');
     }
+  }
+
+  // After a wait for you: the ticker shows what Claude was doing again, or goes.
+  restoreTicker(s) {
+    this.panel.setTicker(s.working && s.last ? s.last : null);
   }
 
   // A chip in the HUD clicked: she points at that session's window and brings you its last

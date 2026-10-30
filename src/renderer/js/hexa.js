@@ -1324,17 +1324,18 @@ export class Hexa {
 
   draw(ctx) {
     const edge = this.lurkEdge();
-    if (edge === null) {
+    if (edge === null) this.drawSelf(ctx);
+    else {
+      // behind a window: nothing of her below its top edge
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(-1e5, -1e5, 2e5, 1e5 + edge);
+      ctx.clip();
       this.drawSelf(ctx);
-      return;
+      ctx.restore();
     }
-    // behind a window: nothing of her below its top edge
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(-1e5, -1e5, 2e5, 1e5 + edge);
-    ctx.clip();
-    this.drawSelf(ctx);
-    ctx.restore();
+    // her Fork's copies stand on their own, never clipped with her
+    if (this.forks.length && !this.hidden) this.drawForks(ctx, this.pose, { ...this.look(), boil: this.player.drawing, alpha: this.alpha });
   }
 
   drawSelf(ctx) {
@@ -1376,7 +1377,6 @@ export class Hexa {
     const tint = this.fx.impactKind();
     if (tint || this.fx.glitching()) this.drawLayered(ctx, pose, look, tint);
     else drawCharacter(ctx, this.rig, this.xf, this.chains, pose, look);
-    if (this.forks.length) this.drawForks(ctx, pose, look);
   }
 
   // Through a layer of her own: an impact frame (her silhouette flat white, ink or red) and the

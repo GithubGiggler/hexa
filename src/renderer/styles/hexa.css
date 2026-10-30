@@ -34,6 +34,11 @@
   --edge: var(--cyan);
 }
 
+/* hidden means hidden, whatever display a class gives (her ticker and the HUD are flex boxes) */
+[hidden] {
+  display: none !important;
+}
+
 html, body {
   margin: 0;
   width: 100%;

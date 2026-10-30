@@ -721,3 +721,29 @@ test('quietly waiting (Do Not Disturb): her emblem turns magenta, she stays put'
   h.markWaiting(false);
   assert.equal(h.look().emblem, h.palette.cyan);
 });
+
+test('her Fork shows even while she lurks behind a window (the copies aren\'t clipped with her)', () => {
+  const { h, advance } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  h.lurk();
+  advance(TELEPORT_S);
+  h.fork();
+  advance(2);
+  // is a clip in force when each PID tag is drawn? (save/restore stack the clip like a canvas does)
+  const stack = [];
+  let clipped = false;
+  const tags = [];
+  const ctx = new Proxy({}, {
+    get: (t, k) => (k in t ? t[k] : (...a) => {
+      if (k === 'save') stack.push(clipped);
+      if (k === 'restore') clipped = stack.pop() ?? false;
+      if (k === 'clip') clipped = true;
+      if (k === 'fillText' && /^PID /.test(a[0])) tags.push(clipped);
+      return { addColorStop() {} };
+    }),
+    set: (t, k, v) => { t[k] = v; return true; },
+  });
+  h.draw(ctx);
+  assert.equal(tags.length, 7);
+  assert.ok(tags.every((c) => !c), 'no copy is drawn inside her clip');
+});

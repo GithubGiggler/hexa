@@ -64,6 +64,7 @@ function hook() {
     check('no click: after her wait, no output (Claude asks as usual)', unanswered.code === 0 && unanswered.out === '' && secs >= 9 && secs <= 13, `${secs} s, output "${unanswered.out}"`);
     s = await state();
     check('and that card is gone too', s.buttons.length === 0);
+    check('and nothing is left WAITING in her ticker', !/WAITING/.test(s.ticker), JSON.stringify(s.ticker));
   } catch (err) {
     error(err);
   }

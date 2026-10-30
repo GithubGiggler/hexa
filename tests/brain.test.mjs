@@ -481,3 +481,18 @@ test('Do Not Disturb: Claude needing you lights her up, but she doesn\'t come or
   brain.handle(evt('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } }));
   assert.equal(waiting, false, 'answered: she goes back to normal');
 });
+
+test('a permission card that goes unanswered gives her ticker back (no WAITING left behind)', () => {
+  const { brain, panel } = rig();
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  brain.handle(evt('PreToolUse', { tool_name: 'Read', tool_input: { file_path: '/p/a.ts' } }));
+  brain.onPermissionAsk(CARD);
+  assert.equal(panel.ticker.state, 'waiting');
+  brain.onPermissionGone('p-1');
+  assert.deepEqual(panel.ticker, { verb: 'READS', target: 'a.ts', state: 'work' }, 'back to what Claude was doing');
+  const idle = rig();
+  idle.brain.answerPermission = () => {};
+  idle.brain.onPermissionAsk(CARD);
+  idle.said.at(-1).onAction('deny');
+  assert.equal(idle.panel.ticker, null, 'nothing going on: no ticker');
+});
