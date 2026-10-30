@@ -13,7 +13,9 @@ const path = require('node:path');
 
 // Hexa answers within her own wait (60 s at most); past this, nobody is answering.
 const WAIT_CAP_MS = 62000;
-const MAX = 280;
+// Her card shows what you'd approve, whole: strings up to this long. Anything longer, or nested
+// deeper, is cut and the request marked incomplete: then her card offers no Allow.
+const MAX = 8000;
 
 // Same rule as src/main/paths.js socketPath(), kept here so the hook stands alone.
 function socketPath() {
@@ -32,17 +34,23 @@ function cut(text, max) {
   return text.slice(0, end) + '…';
 }
 
-// What she shows of the tool's input: short strings, no file contents.
-function trim(value, depth = 0) {
-  if (typeof value === 'string') return cut(value, MAX);
-  if (Array.isArray(value)) return depth > 2 ? undefined : value.slice(0, 8).map((v) => trim(v, depth + 1));
+// The tool's input as her card will show it; state.cut is set when anything didn't fit.
+function trim(value, state = { cut: false }, depth = 0) {
+  if (typeof value === 'string') {
+    if (value.length > MAX) state.cut = true;
+    return cut(value, MAX);
+  }
+  if (Array.isArray(value)) {
+    if (depth > 4 || value.length > 50) state.cut = true;
+    return depth > 4 ? undefined : value.slice(0, 50).map((v) => trim(v, state, depth + 1));
+  }
   if (value && typeof value === 'object') {
-    if (depth > 2) return undefined;
-    const out = {};
-    for (const [k, v] of Object.entries(value)) {
-      if (['content', 'old_string', 'new_string', 'new_source', 'edits'].includes(k)) continue;
-      out[k] = trim(v, depth + 1);
+    if (depth > 4) {
+      state.cut = true;
+      return undefined;
     }
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = trim(v, state, depth + 1);
     return out;
   }
   return value;
@@ -58,14 +66,17 @@ function pickAlways(suggestions) {
 // What goes to Hexa: enough to say what Claude wants to do, and what "Always allow" would allow.
 function buildRequest(evt) {
   const always = pickAlways(evt.permission_suggestions);
-  return {
+  const state = { cut: false };
+  const req = {
     session_id: trim(evt.session_id),
     cwd: trim(evt.cwd),
-    tool_name: trim(evt.tool_name),
-    tool_input: trim(evt.tool_input),
-    always: always ? trim(always) : null,
+    tool_name: trim(evt.tool_name, state),
+    tool_input: trim(evt.tool_input, state),
+    always: always ? trim(always, state) : null,
     ppid: process.ppid,
   };
+  req.complete = !state.cut; // all of it is there to see
+  return req;
 }
 
 // Her answer as the hook's output, or null for no decision.

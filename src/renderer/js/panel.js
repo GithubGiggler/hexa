@@ -8,6 +8,16 @@ import { parseMarkdown, renderBlocks } from './markdown.js';
 const GAP = 14;
 const TYPE_MS = 22;     // per character
 const PRIORITY = { alert: 3, error: 2, done: 2, work: 1, info: 1, idle: 0 };
+const ARM_MS = 700; // a guarded card's buttons answer only after it's been up this long
+
+// What's shown for text that may hold anything (a command to approve): control characters and
+// bidi overrides become visible marks instead of doing their tricks.
+export function visible(text) {
+  return String(text)
+    .replace(/\u001b/g, '␛')
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, (c) => `<U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}>`)
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, (c) => `<U+${c.charCodeAt(0).toString(16).toUpperCase()}>`);
+}
 // what gets a blip as it types: vowels, accented ones too, and kana and kanji (a syllable each)
 export const VOICED = /[aeiouyàáâäãåæèéêëìíîïòóôöõøœùúûüýÿ\u3041-\u30ff\u3400-\u9fff]/i;
 
@@ -42,6 +52,7 @@ export class Panel {
     this.palette = palette;
     this.now = now;
     this.current = null;
+    this.waiting = []; // what came while a guarded card was up
     this.nextId = 1;
     this.anchorRect = [0, 0, 0, 0];
     this.area = { x: 0, y: 0, w: 1920, h: 1080 };
@@ -73,8 +84,16 @@ export class Panel {
   // ---- the panel ----
 
   // actions: [{ id, label, primary }]; onAction(id) when one is clicked, onDismiss() when the panel
-  // goes away any other way (clicked, replaced, cleared)
-  say({ kind = 'info', line = '', tag = '', face = 'calm', hold = 4500, quote = '', summary = '', reply = '', actions = [], onAction, onDismiss }) {
+  // goes away any other way (clicked, replaced, cleared). detail: the whole of something (a command
+  // to approve), in a box of its own. guarded: a card whose buttons matter (permission, consent):
+  // they answer only to a mouse click, only once it's been up a moment, and nothing replaces it:
+  // whatever comes meanwhile waits its turn.
+  say(msg) {
+    const { kind = 'info', line = '', tag = '', face = 'calm', hold = 4500, quote = '', summary = '', reply = '', detail = '', actions = [], onAction, onDismiss, guarded = false } = msg;
+    if (this.current?.guarded) {
+      this.waiting.push(msg);
+      return null;
+    }
     if (this.current && (PRIORITY[this.current.kind] ?? 1) > (PRIORITY[kind] ?? 1) && this.current.hold === null) {
       return null; // an alert stays up until it's answered
     }
@@ -92,6 +111,7 @@ export class Panel {
     body.append(head, lineEl);
     if (quote) body.appendChild(el(doc, 'div', 'hx-quote', quote));
     if (summary) body.appendChild(el(doc, 'div', 'hx-summary', summary));
+    if (detail) body.appendChild(el(doc, 'pre', 'hx-detail', visible(detail)));
     if (reply) {
       const r = el(doc, 'div', 'hx-reply');
       r.appendChild(renderBlocks(parseMarkdown(reply), doc));
@@ -103,8 +123,11 @@ export class Panel {
       for (const a of actions) {
         const b = el(doc, 'button', a.primary ? 'hx-button hx-button--primary' : 'hx-button', a.label);
         b.type = 'button';
+        if (guarded) b.tabIndex = -1;
         b.addEventListener('click', (e) => {
           if (!e.isTrusted) return; // only your own click: never one a script made up
+          // guarded: not the keyboard (detail 0), and not a click already on its way when it showed
+          if (guarded && (e.detail === 0 || this.now() < this.current?.armedAt)) return;
           e.stopPropagation(); // a button isn't also a click to close the panel
           this.hide({ answered: true });
           onAction?.(a.id);
@@ -122,7 +145,7 @@ export class Panel {
     this.root.appendChild(card);
 
     const id = this.nextId++;
-    this.current = { id, kind, line: String(line), shown: 0, card, lineEl, portrait, face, glitchUntil: this.now() + 90, start: this.now(), hold, doneAt: null, onDismiss, buttons };
+    this.current = { id, kind, line: String(line), shown: 0, card, lineEl, portrait, face, glitchUntil: this.now() + 90, start: this.now(), hold, doneAt: null, onDismiss, buttons, guarded, armedAt: this.now() + ARM_MS };
     this.drawFace();
     this.place();
     return id;
@@ -138,6 +161,8 @@ export class Panel {
     c.card.remove();
     this.current = null;
     if (!answered) c.onDismiss?.();
+    // a guarded card gone: the next in line
+    if (c.guarded && this.waiting.length) this.say(this.waiting.shift());
   }
 
   setFace(face) {

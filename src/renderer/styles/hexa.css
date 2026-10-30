@@ -415,3 +415,18 @@ html, body {
 .tc-note { color: var(--muted); }
 .tc-ask { color: var(--amber); }
 .mf-mic.on { background: var(--red); border-color: var(--red); }
+
+/* the whole of what you're approving: scrollable, never cut */
+.hx-detail {
+  margin: 6px 0 2px;
+  max-height: 9.5em;
+  overflow: auto;
+  padding: 5px 7px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(62, 242, 255, 0.25);
+  font: 11px/1.45 'JetBrains Mono', monospace;
+  color: var(--white);
+  white-space: pre-wrap;
+  word-break: break-all;
+  pointer-events: auto;
+}

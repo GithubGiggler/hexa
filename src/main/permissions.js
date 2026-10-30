@@ -23,15 +23,31 @@ function clampWait(seconds) {
   return Math.round(Math.min(60, Math.max(5, Number.isFinite(s) ? s : 10)) * 1000);
 }
 
-// What "Always allow" would allow, in a few words: "Bash(npm test)", "acceptEdits mode"...
+// What "Always allow" would allow, all of it, and where it's saved: "Bash(npm test:*) (saved to
+// localSettings)", "acceptEdits mode (saved to session)"...
 function describeAlways(s) {
   if (!s || typeof s !== 'object') return '';
+  let what = '';
   if (Array.isArray(s.rules) && s.rules.length) {
-    return s.rules.slice(0, 3).map((r) => (r.ruleContent ? `${r.toolName}(${r.ruleContent})` : String(r.toolName || ''))).join(', ');
+    what = s.rules.map((r) => (r.ruleContent ? `${r.toolName}(${r.ruleContent})` : String(r.toolName || ''))).join(', ');
+  } else if (s.type === 'setMode' && s.mode) what = `${s.mode} mode`;
+  else if (Array.isArray(s.directories)) what = s.directories.join(', ');
+  return what && s.destination ? `${what} (saved to ${s.destination})` : what;
+}
+
+// The whole of what you'd approve, as text: a command itself (never the description Claude wrote
+// for it), a path with what goes in it, a URL, or the tool's input as JSON.
+function detailOf(tool, input = {}) {
+  const str = (v) => (typeof v === 'string' ? v : '');
+  if (tool === 'Bash') return str(input.command);
+  if (tool === 'WebFetch') return [str(input.url), str(input.prompt)].filter(Boolean).join('\n');
+  if (['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(tool)) {
+    const path = str(input.file_path) || str(input.notebook_path);
+    if (tool === 'Write') return `${path}\n\n${str(input.content)}`;
+    if (tool === 'Edit') return `${path}\n\n- ${str(input.old_string)}\n+ ${str(input.new_string)}`;
+    return `${path}\n\n${JSON.stringify(input.edits ?? input, null, 2)}`;
   }
-  if (s.type === 'setMode' && s.mode) return `${s.mode} mode`;
-  if (Array.isArray(s.directories)) return s.directories.slice(0, 2).join(', ');
-  return '';
+  return JSON.stringify(input, null, 2);
 }
 
 function createPermissions({ offer, show, hide, waitMs = () => 10000, timers = { setTimeout, clearTimeout } }) {
@@ -63,6 +79,9 @@ function createPermissions({ offer, show, hide, waitMs = () => 10000, timers = {
           project: ask.cwd ? path.basename(String(ask.cwd)) : '',
           tool_name: String(ask.tool_name || ''),
           tool_input: ask.tool_input && typeof ask.tool_input === 'object' ? ask.tool_input : {},
+          detail: detailOf(String(ask.tool_name || ''), ask.tool_input && typeof ask.tool_input === 'object' ? ask.tool_input : {}),
+          // the hook says the whole request is there; a request that doesn't say so isn't
+          complete: ask.complete === true,
           canAlways: Boolean(always),
           always,
           waitMs: waitMs(),
@@ -82,4 +101,4 @@ function createPermissions({ offer, show, hide, waitMs = () => 10000, timers = {
   };
 }
 
-module.exports = { createPermissions, clampWait, describeAlways };
+module.exports = { createPermissions, clampWait, describeAlways, detailOf };

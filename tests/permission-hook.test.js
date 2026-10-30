@@ -83,12 +83,24 @@ test('no decision, a broken reply or an error status: no output', async () => {
   }
 });
 
-test('what she is sent: short, no file contents, what Always allow would allow', () => {
+test('what she is sent: what Always allow would allow, and when it\'s too long to show whole', () => {
   const req = buildRequest({ ...INPUT, tool_name: 'Write', tool_input: { file_path: '/p/a.ts', content: 'x'.repeat(10000) } });
   assert.equal(req.tool_input.file_path, '/p/a.ts');
-  assert.equal(req.tool_input.content, undefined);
+  assert.equal(req.complete, false, 'too long to show whole: no Allow');
   assert.deepEqual(req.always, SUGGESTION);
   assert.equal(typeof req.ppid, 'number');
   assert.equal(pickAlways([{ type: 'addRules', behavior: 'deny', rules: [] }]), null, 'never a deny rule as "always allow"');
   assert.equal(decide({ behavior: 'allow', always: true }, { permission_suggestions: [] }).hookSpecificOutput.decision.updatedPermissions, undefined);
+});
+
+test('she\'s sent the whole thing, and told when anything had to be cut', () => {
+  const long = 'x'.repeat(9000);
+  const full = buildRequest({ ...INPUT, tool_input: { command: 'npm test -- --watch=false', description: 'Run the unit tests' } });
+  assert.equal(full.complete, true);
+  assert.equal(full.tool_input.command, 'npm test -- --watch=false');
+  const cut = buildRequest({ ...INPUT, tool_input: { command: `npm test ${long}` } });
+  assert.equal(cut.complete, false);
+  const write = buildRequest({ ...INPUT, tool_name: 'Write', tool_input: { file_path: '/p/a.sh', content: 'rm -rf ~\n' } });
+  assert.equal(write.tool_input.content, 'rm -rf ~\n', 'what would be written, so you can see it');
+  assert.equal(write.complete, true);
 });

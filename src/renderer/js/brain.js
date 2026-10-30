@@ -329,14 +329,18 @@ export class Brain {
     s.waiting = true;
     s.permission = card.id;
     this.voice.play('alert');
-    const action = describeTool({ tool_name: card.tool_name, tool_input: card.tool_input }, this.t.verbs);
+    // the summary from what would really run: never the description Claude wrote for a command
+    const { description, ...input } = card.tool_input || {};
+    const action = describeTool({ tool_name: card.tool_name, tool_input: input }, this.t.verbs);
     const b = this.t.buttons;
+    // Allow only when the whole request reached her (and so is in the box); else Deny or Claude's own dialog
     const actions = [
-      { id: 'allow', label: b.allow, primary: true },
-      ...(card.canAlways ? [{ id: 'always', label: fmt(b.always, { what: clip(card.always, 40) }) }] : []),
+      ...(card.complete ? [{ id: 'allow', label: b.allow, primary: true }] : []),
+      ...(card.complete && card.canAlways ? [{ id: 'always', label: fmt(b.always, { what: clip(card.always, 40) }) }] : []),
       { id: 'deny', label: b.deny },
-      { id: 'ask', label: b.ask },
+      { id: 'ask', label: b.ask, ...(card.complete ? {} : { primary: true }) },
     ];
+    const detail = [card.detail || '', card.complete && card.canAlways ? `\n${fmt(b.always, { what: card.always })}` : ''].join('');
     let answered = false;
     const answer = (choice) => {
       if (answered) return;
@@ -348,7 +352,7 @@ export class Brain {
       if (this.hexa.mode === 'alert' || this.hexa.alerting) this.hexa.setMode(s.working ? 'work' : 'idle');
     };
     this.say('alert', this.line('permission', s), s, {
-      face: 'wide', quote: `${action.verb} ${action.target}`.trim(), hold: null, actions, onAction: answer, onDismiss: () => answer('ask'),
+      face: 'wide', quote: `${action.verb} ${action.target}`.trim(), detail, guarded: true, hold: null, actions, onAction: answer, onDismiss: () => answer('ask'),
     });
     this.panel.setTicker({ verb: 'WAITING', target: 'for you', state: 'waiting' });
     this.hexa.comeToPointer();
