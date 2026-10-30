@@ -10,3 +10,11 @@ export function linesFor(lang) {
   const table = TABLES[lang] || en;
   return { ...en.LINES, ...table.LINES, verbs: table.VERBS || en.VERBS, guide: { ...en.GUIDE, ...(table.GUIDE || {}) } };
 }
+
+// Which greeting goes after her boot line at this hour (0-23).
+export function greetingKey(hour) {
+  if (hour < 5) return 'greetLate';
+  if (hour < 12) return 'greetMorning';
+  if (hour < 18) return 'greetDay';
+  return 'greetEvening';
+}

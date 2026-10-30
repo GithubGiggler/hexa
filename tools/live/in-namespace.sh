@@ -11,6 +11,9 @@ export XDG_RUNTIME_DIR=/tmp/run XDG_CONFIG_HOME=$live/config XDG_DATA_HOME=$live
 export XDG_CACHE_HOME=$live/cache XDG_STATE_HOME=$live/state
 unset DISPLAY WAYLAND_DISPLAY DBUS_SESSION_BUS_ADDRESS SESSION_MANAGER
 export KWIN_COMPOSE=Q # software compositing: no GPU needed
+# its own KWin config: Xwayland's synthetic input (XTEST, which the scenarios use to click and
+# type) goes through KWin, which would otherwise ask first, on a screen nobody sees
+printf '[Xwayland]\nXwaylandEisNoPrompt=true\n' > "$live/config/kwinrc"
 
 dbus-run-session --config-file="$here/bus.conf" -- \
   kwin_wayland --virtual --xwayland --width 2560 --height 1440 --socket hexa-live --no-lockscreen \

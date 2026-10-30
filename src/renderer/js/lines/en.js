@@ -211,4 +211,30 @@ export const LINES = {
     'Missed me?',
     'Back where I belong.',
   ],
+  // after her boot line, by the hour
+  greetLate: [
+    'It\'s the middle of the night. Still at it?',
+    'Night shift again? I\'ll keep watch.',
+    'Shouldn\'t you be asleep? Fine. Me neither.',
+  ],
+  greetMorning: [
+    'Morning. Systems warm.',
+    'Good morning. Coffee first, then code.',
+    'Early start. I like it.',
+  ],
+  greetDay: [
+    'Afternoon. Let\'s get things done.',
+    'Middle of the day, middle of the build.',
+    'Afternoon shift. I\'m here.',
+  ],
+  greetEvening: [
+    'Evening. One more feature?',
+    'Evening shift. I\'ll keep the lights on.',
+    'Long day? I\'ve got the watch.',
+  ],
+  noLurk: [
+    'No window of yours I can stand behind right now.',
+    'Nothing to hide behind. Open a window?',
+    'I need a window with some room above it.',
+  ],
 };

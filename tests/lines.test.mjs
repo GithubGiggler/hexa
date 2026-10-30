@@ -34,3 +34,22 @@ test('linesFor falls back to English and carries the verbs', () => {
   assert.equal(linesFor('xx').verbs, VERBS);
   assert.equal(linesFor('en').hello, LINES.hello);
 });
+
+test('a greeting for every hour of the day', async () => {
+  const { greetingKey } = await import('../src/renderer/js/lines/index.js');
+  const keys = new Set();
+  for (let h = 0; h < 24; h++) {
+    const k = greetingKey(h);
+    assert.ok(Array.isArray(LINES[k]) && LINES[k].length >= 3, `${h}h: ${k}`);
+    keys.add(k);
+  }
+  assert.equal(greetingKey(2), 'greetLate');
+  assert.equal(greetingKey(8), 'greetMorning');
+  assert.equal(greetingKey(14), 'greetDay');
+  assert.equal(greetingKey(20), 'greetEvening');
+  assert.equal(keys.size, 4);
+});
+
+test('she has something to say when there is no window to lurk behind', () => {
+  assert.ok(LINES.noLurk.length >= 3);
+});

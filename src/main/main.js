@@ -18,7 +18,7 @@ const { connect: connectX11 } = require('./platform/linux/x11');
 const autostart = require('./platform/linux/autostart');
 const claudeHooks = require('./hooks/claude');
 const { registerPrivileged, registerHexaProtocol } = require('./protocol');
-const { buildMenu, createTray } = require('./tray');
+const { buildMenu, toModel, createTray } = require('./tray');
 const { trayLabels } = require('./labels');
 const { screen } = require('electron');
 const { playDemo } = require('./demo');
@@ -70,6 +70,19 @@ function start() {
   let overlay = null;
   let bridge = null;
   let trayHandle = null;
+  let shownMenu = null; // her own menu while it's open: { items, run }
+
+  // While her menu is open, these keys are its (the overlay never has keyboard focus).
+  const MENU_KEYS = ['Escape', 'Up', 'Down', 'Left', 'Right', 'Return'];
+  let menuKeys = false;
+  function grabMenuKeys(on) {
+    if (on === menuKeys) return;
+    menuKeys = on;
+    for (const key of MENU_KEYS) {
+      if (on) globalShortcut.register(key, () => send('menu:key', key));
+      else globalShortcut.unregister(key);
+    }
+  }
   let x11 = null;
   let reducedMotion = false;
   let trayStatus = null;
@@ -119,6 +132,7 @@ function start() {
       trayHandle?.rebuild();
     },
     teleport: () => send('hexa:command', { name: 'teleport' }),
+    lurk: () => send('hexa:command', { name: 'lurk' }),
     guide: () => send('hexa:command', { name: 'guide' }),
     demo: () => {
       stopDemo?.();
@@ -222,7 +236,22 @@ function start() {
       return updateConfig(allowed);
     });
     ipcMain.on('hits:set', (_e, rects) => overlay?.setHitRects(rects));
-    ipcMain.on('menu:open', () => trayHandle?.popup({ window: overlay.win }));
+    // her own menu (a right-click on her): the tray's, as data, drawn by her
+    ipcMain.on('menu:open', () => {
+      shownMenu = toModel(buildMenu(trayState(), t(), actions));
+      send('menu:show', { items: shownMenu.items });
+      grabMenuKeys(true);
+    });
+    ipcMain.on('menu:pick', (_e, id) => {
+      const menu = shownMenu;
+      shownMenu = null;
+      grabMenuKeys(false);
+      menu?.run(id);
+    });
+    ipcMain.on('menu:closed', () => {
+      shownMenu = null;
+      grabMenuKeys(false);
+    });
     ipcMain.handle('sounds:list', () => {
       try {
         return fs.readdirSync(path.join(paths.dataDir(), 'sounds')).filter((f) => SOUND_FILES.test(f));
@@ -277,6 +306,12 @@ function start() {
       displayId: cfg.displayId,
     });
     console.log(`[hexa] overlay on display ${overlay.display.id} (${overlay.display.bounds.width}×${overlay.display.bounds.height}), click-through by ${overlay.mode}`);
+    // in dev mode her page's warnings and errors land in her log too
+    if (DEV) {
+      overlay.win.webContents.on('console-message', (e) => {
+        if (e.level === 'warning' || e.level === 'error') console.log(`[renderer] ${e.message} (${e.sourceId}:${e.lineNumber})`);
+      });
+    }
 
     // where your windows are: from KWin itself on Plasma Wayland (XWayland only sees its own
     // windows), from the X server everywhere else

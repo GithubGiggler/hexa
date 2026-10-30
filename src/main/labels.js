@@ -10,6 +10,7 @@ const TRAY = {
     hide: 'Send to background',
     show: 'Bring her back',
     teleport: 'Teleport',
+    lurk: 'Watch my window',
     demo: 'Play demo',
     help: 'How does it work?',
     size: 'Size',

@@ -181,3 +181,60 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .hx-panel { animation: none; }
 }
+
+/* her own menu (a right-click on her): the layer under it takes every click while it's open */
+.menu-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 100; /* over her panel and ticker */
+  pointer-events: auto;
+}
+.menu {
+  position: fixed;
+  min-width: 210px;
+  padding: 5px 0;
+  background: rgba(20, 26, 46, 0.97);
+  border: 1px solid rgba(62, 242, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 16px rgba(62, 242, 255, 0.12);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 5px 8px;
+  white-space: nowrap;
+}
+.menu-item.on {
+  background: linear-gradient(90deg, rgba(255, 62, 165, 0.9), rgba(255, 62, 165, 0.55));
+  color: var(--white);
+}
+.menu-item.off {
+  color: var(--muted);
+}
+.menu-item.off.on {
+  background: none;
+}
+.menu-mark {
+  width: 14px;
+  text-align: center;
+  color: var(--cyan);
+}
+.menu-item.on .menu-mark {
+  color: var(--white);
+}
+.menu-label {
+  flex: 1;
+}
+.menu-arrow {
+  color: var(--cyan);
+  margin-left: 18px;
+}
+.menu-sep {
+  height: 1px;
+  margin: 4px 10px;
+  background: rgba(62, 242, 255, 0.22);
+}

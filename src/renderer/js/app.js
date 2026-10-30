@@ -10,9 +10,10 @@ import { Hexa } from './hexa.js';
 import { Panel } from './panel.js';
 import { Voice } from './voice.js';
 import { Brain } from './brain.js';
-import { linesFor } from './lines/index.js';
+import { linesFor, greetingKey } from './lines/index.js';
 import { pick, fmt } from './util.js';
 import { Guide } from './guide.js';
+import { Menu } from './menu.js';
 
 const host = window.host;
 const HIT_EVERY_MS = 33;
@@ -44,6 +45,10 @@ const hexa = new Hexa({
   settings: { wander: cfg.wander, possess: cfg.possess, motion: cfg.motion, reducedMotion: cfg.reducedMotion },
 });
 const panel = new Panel({ root: ui, voice, glyphs: pack.glyphs, palette: pack.palette });
+const menu = new Menu({ root: ui, onPick: (id) => host.menuPick(id), onClose: () => host.menuClosed() });
+let menuAt = { x: 0, y: 0 };
+host.onMenu(({ items }) => menu.show(items, menuAt, area, { x: 0, y: 0, w: innerWidth, h: innerHeight }));
+host.onMenuKey((key) => menu.key(key));
 const brain = new Brain({ hexa, panel, voice, lang: cfg.lang || 'en' });
 brain.linked = cfg.linked;
 brain.watching = cfg.claude;
@@ -66,7 +71,7 @@ hexa.onSay = (key) => {
   const t = lines();
   if (!t[key]) return;
   let line = fmt(pick(t[key]), vars);
-  if (key === 'boot') line = `${line} ${fmt(pick(t.online), vars)}`;
+  if (key === 'boot') line = `${line} ${fmt(pick(t.online), vars)} ${pick(t[greetingKey(new Date().getHours())])}`;
   panel.say({ kind: 'info', line, face: FACES[key] || 'calm', hold: key === 'boot' ? 5000 : 3200 });
 };
 
@@ -96,6 +101,7 @@ host.onEvent((evt) => {
 host.onCommand(({ name, on }) => {
   if (name === 'background') hexa.setBackground(on ?? hexa.mode !== 'background');
   else if (name === 'teleport') hexa.teleport();
+  else if (name === 'lurk') { if (!hexa.lurk()) hexa.onSay('noLurk'); }
   else if (name === 'resume') brain.resume();
   else if (name === 'showcase') showcase();
   else if (name === 'guide') guide.menu();
@@ -125,6 +131,7 @@ host.answerState(() => ({
   perch: hexa.perch,
   pointing: hexa.pointing ? { id: hexa.pointing.rect.id ?? null, label: hexa.pointing.label } : null,
   hitRects: [...hexa.hitRects(), ...panel.rects()],
+  menu: menu.open,
 }));
 
 // ---- the mouse, on her ----
@@ -155,6 +162,8 @@ canvas.addEventListener('pointerup', (e) => {
 });
 addEventListener('contextmenu', (e) => {
   e.preventDefault();
+  if (menu.open) return;
+  menuAt = { x: e.clientX, y: e.clientY };
   host.openMenu();
 });
 
@@ -224,7 +233,7 @@ function frame(now) {
   }
   if (now - lastHits >= HIT_EVERY_MS) {
     lastHits = now;
-    const rects = [...body, ...panel.rects()].map((r) => r.map((v) => Math.round(v)));
+    const rects = [...body, ...panel.rects(), ...menu.rects()].map((r) => r.map((v) => Math.round(v)));
     const key = JSON.stringify(rects);
     if (key !== sentHits) {
       sentHits = key;

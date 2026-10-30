@@ -76,3 +76,27 @@ test('a Screen submenu lists the displays, and following can be turned off', () 
   find(menu, t.follow).click();
   assert.deepEqual(hit.at(-1), ['follow', false]);
 });
+
+test('toModel: her menu as plain data, and run(id) does what the item does', () => {
+  const { toModel } = require('../src/main/tray');
+  const did = [];
+  const template = [
+    { label: 'Online', enabled: false },
+    { type: 'separator' },
+    { label: 'Teleport', click: () => did.push('teleport') },
+    { label: 'Size', submenu: [{ label: 'Small', type: 'radio', checked: true, click: () => did.push('small') }] },
+    { label: 'Mute', type: 'checkbox', checked: false, click: () => did.push('mute') },
+    { label: 'Off', enabled: false, click: () => did.push('never') },
+  ];
+  const { items, run } = toModel(template);
+  assert.deepEqual(items.map((i) => i.type), ['normal', 'separator', 'normal', 'submenu', 'checkbox', 'normal']);
+  assert.equal(items[0].enabled, false);
+  assert.equal(items[3].submenu[0].type, 'radio');
+  assert.equal(items[3].submenu[0].checked, true);
+  assert.equal(JSON.stringify(items).includes('function'), false);
+  assert.equal(run(items[2].id), true);
+  assert.equal(run(items[3].submenu[0].id), true);
+  assert.equal(run(items[5].id), false, 'a disabled item does nothing');
+  assert.equal(run('nope'), false);
+  assert.deepEqual(did, ['teleport', 'small']);
+});

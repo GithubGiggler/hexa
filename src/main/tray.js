@@ -21,6 +21,7 @@ function buildMenu(state, t, act) {
     sep,
     state.visible ? { label: t.hide, click: () => act.toggle() } : { label: t.show, click: () => act.toggle() },
     { label: t.teleport, enabled: Boolean(state.visible), click: () => act.teleport() },
+    { label: t.lurk, enabled: Boolean(state.visible), click: () => act.lurk() },
     { label: t.demo, click: () => act.demo() },
     { label: t.help, click: () => act.guide() },
     sep,
@@ -55,6 +56,32 @@ function buildMenu(state, t, act) {
   ];
 }
 
+// The same menu as plain data for the one she draws herself (a right-click on her): every item
+// gets an id, and run(id) does what clicking it would. Disabled items do nothing.
+function toModel(template) {
+  const clicks = new Map();
+  const walk = (list, prefix) => list.map((item, i) => {
+    if (item.type === 'separator') return { type: 'separator' };
+    const id = `${prefix}${i}`;
+    const enabled = item.enabled !== false;
+    if (item.submenu) return { id, type: 'submenu', label: item.label, enabled, submenu: walk(item.submenu, `${id}.`) };
+    if (enabled && item.click) clicks.set(id, item.click);
+    const out = { id, type: item.type === 'checkbox' || item.type === 'radio' ? item.type : 'normal', label: item.label, enabled };
+    if (out.type !== 'normal') out.checked = Boolean(item.checked);
+    return out;
+  });
+  const items = walk(template, 'm');
+  return {
+    items,
+    run(id) {
+      const click = clicks.get(id);
+      if (!click) return false;
+      click();
+      return true;
+    },
+  };
+}
+
 // The tray icon itself. rebuild() after anything in the menu changes.
 function createTray({ Tray, Menu, icon, tooltip = 'Hexa', getMenu }) {
   const tray = new Tray(icon);
@@ -69,4 +96,4 @@ function createTray({ Tray, Menu, icon, tooltip = 'Hexa', getMenu }) {
   return { tray, rebuild, popup: (opts) => (menu || rebuild()).popup(opts) };
 }
 
-module.exports = { buildMenu, createTray, SIZES };
+module.exports = { buildMenu, toModel, createTray, SIZES };
