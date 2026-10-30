@@ -92,7 +92,8 @@ host.onComputerEnd((out) => {
 });
 host.onMenu(({ items }) => menu.show(items, menuAt, area, { x: 0, y: 0, w: innerWidth, h: innerHeight }));
 host.onMenuKey((key) => menu.key(key));
-const brain = new Brain({ hexa, panel, voice, lang: cfg.lang || 'en' });
+// cfg.assistant: whose work she follows ('claude', 'codex' or 'agy'; her menu's Watch)
+const brain = new Brain({ hexa, panel, voice, lang: cfg.lang || 'en', assistant: cfg.assistant || 'claude' });
 brain.answerPermission = (id, choice) => host.answerPermission(id, choice);
 host.onPermission((card) => brain.onPermissionAsk(card));
 host.onPermissionGone(({ id }) => brain.onPermissionGone(id));
@@ -112,7 +113,7 @@ panel.setTicker = (t) => {
 
 const lines = () => linesFor(cfg.lang || 'en');
 const guide = new Guide({ hexa, panel, host, brain, lines });
-const vars = { name: 'Claude', user: 'there' };
+const vars = { name: brain.name, user: 'there' };
 hexa.onSay = (key) => {
   const t = lines();
   if (!t[key]) return;
@@ -263,6 +264,8 @@ host.onConfig((c) => {
   applySettings();
   brain.watching = c.claude;
   brain.jealousOn = c.jealous !== false;
+  brain.watch(c.assistant || 'claude');
+  vars.name = brain.name;
 });
 
 host.onPointer((p) => hexa.onPointer(p));

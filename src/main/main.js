@@ -17,6 +17,8 @@ const { createOverlay } = require('./overlay');
 const { connect: connectX11 } = require('./platform/linux/x11');
 const autostart = require('./platform/linux/autostart');
 const claudeHooks = require('./hooks/claude');
+// every assistant's hooks: Claude Code's, the Codex CLI's, Antigravity's
+const assistants = require('./hooks');
 const { createPermissions, clampWait } = require('./permissions');
 const { createHub } = require('./brain/hub');
 const { createSecrets } = require('./secrets');
@@ -158,7 +160,9 @@ function start() {
   const send = (channel, payload) => {
     if (overlay && !overlay.win.isDestroyed()) overlay.win.webContents.send(channel, payload);
   };
-  const rendererConfig = () => ({ ...config.load(), reducedMotion, lang: lang(), packUrl: 'hexa://app/packs/hexa/pack.json' });
+  // whose work she follows: 'claude', 'codex' or 'agy' (her menu's Watch)
+  const watched = () => assistants.assistantOf(config.load().assistant) || 'claude';
+  const rendererConfig = () => ({ ...config.load(), assistant: watched(), reducedMotion, lang: lang(), packUrl: 'hexa://app/packs/hexa/pack.json' });
 
   function updateConfig(patch) {
     config.save(patch);
@@ -167,14 +171,23 @@ function start() {
     return rendererConfig();
   }
 
-  function installHooks() {
+  // The hooks of the assistant she watches, unless told whose.
+  function installHooks(assistant = watched()) {
     try {
-      const r = claudeHooks.install({ hookSource: path.join(appDir, 'hooks', 'hexa-hook.js'), dataDir: paths.dataDir() });
-      console.log(`[hexa] hooks installed in ${r.file}`);
+      const r = assistants.install(assistant, { appDir, dataDir: paths.dataDir() });
+      console.log(`[hexa] ${assistant} hooks installed in ${r.file}`);
       return { ok: true, ...r };
     } catch (err) {
-      console.error('[hexa] could not install hooks:', err.message);
+      console.error(`[hexa] could not install ${assistant} hooks:`, err.message);
       return { ok: false, error: err.message };
+    } finally {
+      trayHandle?.rebuild();
+    }
+  }
+
+  function uninstallHooks(assistant = watched()) {
+    try {
+      return assistants.uninstall(assistant);
     } finally {
       trayHandle?.rebuild();
     }
@@ -184,7 +197,8 @@ function start() {
     const cfg = config.load();
     const screenName = t().display;
     const displays = screen.getAllDisplays().map((d, i) => ({ id: d.id, label: `${screenName.replace('{n}', i + 1)} (${d.bounds.width}×${d.bounds.height})`, current: d.id === overlay?.display.id }));
-    return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, possess: cfg.possess, jealous: cfg.jealous, follow: cfg.follow, displays, startAtLogin: autostart.isEnabled(), hooks: claudeHooks.status(), status: trayStatus || `Hexa · ${bond.stage().name}` };
+    const assistant = watched();
+    return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, possess: cfg.possess, jealous: cfg.jealous, follow: cfg.follow, displays, startAtLogin: autostart.isEnabled(), assistant, hooks: assistants.status(assistant), status: trayStatus || `Hexa · ${bond.stage().name}` };
   }
 
   // Answering permissions from her (opt-in; permissions.js). She doesn't offer when she's in the
@@ -192,7 +206,8 @@ function start() {
   let doNotDisturb = false;
   const permissions = createPermissions({
     offer: () => {
-      if (config.load().visible === false || doNotDisturb) return false;
+      // nor while she watches another assistant: Claude Code's prompts aren't hers to bring you then
+      if (config.load().visible === false || doNotDisturb || watched() !== 'claude') return false;
       const idle = powerMonitor.getSystemIdleState(120);
       return idle !== 'idle' && idle !== 'locked';
     },
@@ -240,7 +255,12 @@ function start() {
       config.save({ startAtLogin: on });
       trayHandle?.rebuild();
     },
-    installHooks,
+    installHooks: () => installHooks(),
+    // whose work she follows; her brain drops the sessions of the one she stops watching
+    watch: (assistant) => {
+      const id = assistants.assistantOf(assistant);
+      if (id) updateConfig({ assistant: id });
+    },
     permissions: (on) => {
       try {
         if (on) claudeHooks.installPermission({ hookSource: path.join(appDir, 'hooks', 'hexa-permission-hook.js'), dataDir: paths.dataDir() });
@@ -253,11 +273,10 @@ function start() {
     },
     removeHooks: () => {
       try {
-        claudeHooks.uninstall();
+        uninstallHooks();
       } catch (err) {
         console.error('[hexa] could not remove hooks:', err.message);
       }
-      trayHandle?.rebuild();
     },
     quit: () => {
       quitReason = 'from her menu';
@@ -322,21 +341,20 @@ function start() {
       const r = statsCli(history, q);
       return r.status ? r : r.body;
     },
+    // `hexa hooks … --assistant <claude|codex|agy>` (cli.js checks the name and defaults to claude)
     hooks: {
-      install: installHooks,
-      uninstall: () => {
-        try {
-          return claudeHooks.uninstall();
-        } finally {
-          trayHandle?.rebuild();
-        }
-      },
-      status: () => claudeHooks.status(),
+      install: (assistant) => installHooks(assistant),
+      uninstall: (assistant) => uninstallHooks(assistant),
+      status: (assistant) => assistants.status(assistant),
     },
   });
-  // in the background, or with Do Not Disturb on, Claude's news comes as a notification; its only
-  // button, Show, brings her back
-  const notices = createNotices({ notify: notifier.notify, away: () => config.load().visible === false || linuxState().dnd });
+  // in the background, or with Do Not Disturb on, her assistant's news comes as a notification
+  // (only the one she watches); its only button, Show, brings her back
+  const notices = createNotices({
+    notify: notifier.notify,
+    away: () => config.load().visible === false || linuxState().dnd,
+    follows: (evt) => assistants.ownerOf(evt) === watched(),
+  });
   notifier.onAction((_id, action) => {
     if (action === 'show') cli.handle('show', {});
   });
@@ -440,7 +458,8 @@ function start() {
       if (bottom < b.y + b.height) return [b.width - 260, bottom - b.y, 240, b.y + b.height - bottom]; // at the bottom
       return null; // no panel on this screen
     });
-    ipcMain.handle('hooks:install', () => installHooks());
+    // her guide is about Claude Code: its hooks, whoever she watches
+    ipcMain.handle('hooks:install', () => installHooks('claude'));
 
     // her Mainframe (brain/hub.js); only her own page may ask
     const fromHer = (e) => e.sender === overlay?.win.webContents;

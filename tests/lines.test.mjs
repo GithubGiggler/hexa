@@ -130,7 +130,7 @@ for (const [lang, table] of Object.entries(TABLES)) {
     assert.deepEqual(t.guide, table.GUIDE);
     assert.deepEqual(t.buttons, table.BUTTONS);
     // "my menu › Remove Claude Code hooks" has to be what her menu really says
-    assert.ok(table.GUIDE.folderHow.includes(labels.trayLabels(lang).hooksRemove), `${lang}: folderHow`);
+    assert.ok(table.GUIDE.folderHow.includes(labels.trayLabels(lang).hooksRemove.replace('{name}', 'Claude Code')), `${lang}: folderHow`);
   });
 }
 

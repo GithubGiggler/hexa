@@ -179,8 +179,47 @@ test('hooks: install, uninstall, status; anything else is a 400', async () => {
   assert.equal((await cli.handle('hooks', { action: 'status' })).body.installed, true);
   assert.equal((await cli.handle('hooks', { action: 'rm -rf' })).status, 400);
   assert.equal((await cli.handle('hooks', {})).status, 400);
-  assert.equal((await cli.handle('hooks', { action: 'install', assistant: 'codex' })).status, 400);
+  assert.equal((await cli.handle('hooks', { action: 'install', assistant: 'cursor' })).status, 400);
+  assert.equal((await cli.handle('hooks', { action: 'install', assistant: 42 })).status, 400);
   assert.deepEqual(calls, ['install', 'uninstall']);
+});
+
+test('hooks: --assistant picks whose (claude by default; antigravity is agy)', async () => {
+  const asked = [];
+  const { cli } = rig({
+    hooks: {
+      install: (a) => { asked.push(['install', a]); return { file: `/${a}/hooks.json`, events: 1 }; },
+      uninstall: (a) => { asked.push(['uninstall', a]); return { file: `/${a}/hooks.json`, removed: false }; },
+      status: (a) => { asked.push(['status', a]); return { file: `/${a}/hooks.json`, installed: false, events: [] }; },
+    },
+  });
+  assert.equal((await cli.handle('hooks', { action: 'install', assistant: 'codex' })).body.file, '/codex/hooks.json');
+  await cli.handle('hooks', { action: 'uninstall', assistant: 'Antigravity' });
+  await cli.handle('hooks', { action: 'status', assistant: 'agy' });
+  await cli.handle('hooks', { action: 'status' });
+  assert.deepEqual(asked, [['install', 'codex'], ['uninstall', 'agy'], ['status', 'agy'], ['status', 'claude']]);
+  const bad = await cli.handle('hooks', { action: 'install', assistant: 'cursor' });
+  assert.match(bad.body.error, /cursor.*claude, codex, agy/);
+});
+
+test('status: the hooks of the assistant she watches, with any warning', async () => {
+  const asked = [];
+  const { cli } = rig({
+    config: { load: () => ({ visible: true, assistant: 'codex' }) },
+    hooks: { status: (a) => { asked.push(a); return { installed: true, warning: 'hooks are off' }; } },
+  });
+  const r = await cli.handle('status', {});
+  assert.equal(r.body.assistant, 'codex');
+  assert.deepEqual(r.body.hooks, { installed: true, warning: 'hooks are off' });
+  assert.deepEqual(asked, ['codex']);
+  assert.equal(r.body.sessions, 0, 'the rig’s one session is Claude Code’s');
+  const two = rig({
+    config: { load: () => ({ assistant: 'codex' }) },
+    sessions: () => [{ id: 'codex:a', assistant: 'codex' }, { id: 'b', assistant: 'claude' }, { id: 'codex:c', assistant: 'codex' }],
+  });
+  assert.equal((await two.cli.handle('status', {})).body.sessions, 2);
+  const odd = rig({ config: { load: () => ({ assistant: 'nope' }) } });
+  assert.equal((await odd.cli.handle('status', {})).body.assistant, 'claude');
 });
 
 test('hooks: a failure is a 500 with its reason', async () => {

@@ -9,6 +9,8 @@ const t = trayLabels('en');
 const base = { visible: true, scale: 1, muted: false, wander: true, startAtLogin: false, hooks: { installed: false } };
 const noop = new Proxy({}, { get: () => () => {} });
 const find = (items, label) => items.flatMap((i) => [i, ...(i.submenu || [])]).find((i) => i.label === label);
+// a hooks label as the menu shows it, for the assistant she watches (Claude Code unless told)
+const named = (key, name = t.watchClaude) => t[key].replace('{name}', name);
 
 test('size radio follows the config', () => {
   const menu = buildMenu(base, t, noop);
@@ -19,11 +21,12 @@ test('size radio follows the config', () => {
 });
 
 test('hooks entry reflects their status', () => {
-  assert.ok(find(buildMenu(base, t, noop), t.hooksOff));
+  assert.ok(find(buildMenu(base, t, noop), named('hooksOff')));
+  assert.equal(named('hooksOff'), 'Install Claude Code hooks');
   const installed = buildMenu({ ...base, hooks: { installed: true } }, t, noop);
-  assert.ok(find(installed, t.hooksRemove));
-  assert.ok(find(installed, t.hooksOn));
-  assert.equal(find(installed, t.hooksOff), undefined);
+  assert.ok(find(installed, named('hooksRemove')));
+  assert.ok(find(installed, named('hooksOn')));
+  assert.equal(find(installed, named('hooksOff')), undefined);
   const broken = buildMenu({ ...base, hooks: { installed: false, error: 'settings.json is not valid JSON' } }, t, noop);
   assert.ok(broken.some((i) => i.label && i.label.includes('not valid JSON') && i.enabled === false));
 });
@@ -58,7 +61,7 @@ test('clicks reach their actions', () => {
   const act = new Proxy({}, { get: (_, k) => () => hit.push(k) });
   const menu = buildMenu(base, t, act);
   find(menu, t.large).click();
-  find(menu, t.hooksOff).click();
+  find(menu, named('hooksOff')).click();
   find(menu, t.quit).click();
   assert.deepEqual(hit, ['size', 'installHooks', 'quit']);
 });
@@ -135,4 +138,51 @@ test('her menu is there in every language, every label of it', () => {
   assert.equal(trayLabels('de').quit, 'Beenden');
   assert.equal(trayLabels('ja').display.replace('{n}', 2), '画面2');
   assert.equal(trayLabels('xx').quit, 'Quit', 'unknown languages get English');
+});
+
+test('Watch: a radio for each assistant, the watched one checked; a click asks to watch it', () => {
+  const hit = [];
+  const act = new Proxy({}, { get: (_, k) => (v) => hit.push([k, v]) });
+  const menu = buildMenu(base, t, act);
+  const watch = find(menu, t.watch).submenu;
+  assert.deepEqual(watch.map((i) => [i.label, i.type, i.checked]), [
+    ['Claude Code', 'radio', true], ['Codex', 'radio', false], ['Antigravity', 'radio', false],
+  ]);
+  watch[1].click();
+  watch[2].click();
+  assert.deepEqual(hit, [['watch', 'codex'], ['watch', 'agy']]);
+  const codex = find(buildMenu({ ...base, assistant: 'codex' }, t, act), t.watch).submenu;
+  assert.deepEqual(codex.map((i) => i.checked), [false, true, false]);
+});
+
+test('an assistant she doesn’t know counts as Claude Code', () => {
+  const menu = buildMenu({ ...base, assistant: 'cursor' }, t, noop);
+  assert.deepEqual(find(menu, t.watch).submenu.map((i) => i.checked), [true, false, false]);
+  assert.ok(find(menu, named('hooksOff')));
+});
+
+test('the hooks items are the watched assistant’s; answering permissions is Claude Code’s alone', () => {
+  const hit = [];
+  const act = new Proxy({}, { get: (_, k) => () => hit.push(k) });
+  const off = buildMenu({ ...base, assistant: 'codex' }, t, act);
+  assert.ok(find(off, 'Install Codex hooks'));
+  assert.equal(find(off, named('hooksOff')), undefined);
+  assert.equal(find(off, t.permissions), undefined);
+  find(off, 'Install Codex hooks').click();
+  const on = buildMenu({ ...base, assistant: 'agy', hooks: { installed: true } }, t, act);
+  assert.equal(find(on, 'Antigravity hooks: installed').enabled, false);
+  find(on, 'Remove Antigravity hooks').click();
+  assert.deepEqual(hit, ['installHooks', 'removeHooks']);
+  assert.ok(find(buildMenu(base, t, noop), t.permissions), 'still there for Claude Code');
+  const broken = buildMenu({ ...base, assistant: 'codex', hooks: { installed: false, error: 'hooks.json is not valid JSON' } }, t, noop);
+  assert.ok(broken.some((i) => i.label === 'Codex settings: hooks.json is not valid JSON' && i.enabled === false));
+});
+
+test('a warning from the assistant’s own settings shows under its hooks, not clickable', () => {
+  const warning = 'Codex has hooks turned off in /x/config.toml ([features] hooks = false)';
+  const menu = buildMenu({ ...base, assistant: 'codex', hooks: { installed: true, warning } }, t, noop);
+  const i = menu.findIndex((m) => m.label === warning);
+  assert.ok(i > 0);
+  assert.equal(menu[i].enabled, false);
+  assert.equal(menu[i - 1].label, 'Remove Codex hooks');
 });

@@ -18,6 +18,13 @@ test('missing file gives defaults', () => {
   assert.deepEqual(config.load(true), config.DEFAULTS);
 });
 
+test('she watches Claude Code unless told otherwise', () => {
+  fresh();
+  assert.equal(config.load(true).assistant, 'claude');
+  assert.equal(config.save({ assistant: 'codex' }).assistant, 'codex');
+  assert.equal(config.load(true).assistant, 'codex', 'kept on disk');
+});
+
 test('save merges, persists and keeps unknown keys', () => {
   const dir = fresh();
   fs.mkdirSync(dir, { recursive: true });
@@ -51,7 +58,7 @@ test('save is atomic: no temp file left behind', () => {
 test('defaults are the M1 set', () => {
   assert.deepEqual(config.DEFAULTS, {
     configVersion: 1, scale: 1, muted: false, volume: 0.7, lang: 'auto', displayId: null, follow: true, wander: true, possess: true,
-    visible: true, welcomed: false, linked: false, claude: true, motion: 'auto', shortcut: 'Ctrl+Alt+H',
+    visible: true, welcomed: false, linked: false, claude: true, assistant: 'claude', motion: 'auto', shortcut: 'Ctrl+Alt+H',
     startAtLogin: false, tcp: false, permissionWait: 10, brain: 'normal', brainModels: {}, computerUse: false,
     userName: '', memories: [], jealous: true,
   });

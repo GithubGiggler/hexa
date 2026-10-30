@@ -54,7 +54,7 @@ export const GUIDE = {
   claudeHere: 'Das ist Claudes Fenster: das, in dem du deinen letzten Prompt getippt hast.',
   claudeUnknown: 'Ich habe Claude noch nicht gesehen. Schick ihm einen Prompt und frag mich nochmal.',
   folderLine: 'Das ist ~/.claude, da hebt Claude Code seine Einstellungen auf. Mein Hook wohnt in settings.json, unter "hooks".',
-  folderHow: 'Um mich rauszunehmen: mein Menü › Claude-Code-Hooks entfernen. Ein Backup von settings.json liegt gleich daneben.',
+  folderHow: 'Um mich rauszunehmen: mein Menü › Claude Code-Hooks entfernen. Ein Backup von settings.json liegt gleich daneben.',
   iconLine: 'Mein Symbol wohnt hier oben, in deiner Leiste. Rechtsklick darauf, oder auf mich, für mein Menü.',
   iconNone: 'Deine Leiste ist nicht auf diesem Bildschirm, also kann ich dir mein Symbol nicht zeigen. Rechtsklick auf mich für mein Menü.',
   ok: 'OK',

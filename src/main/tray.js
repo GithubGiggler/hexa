@@ -4,18 +4,35 @@
 // buildMenu is pure: state and labels in, a menu template out, so it can be tested without Electron.
 
 const SIZES = [['small', 0.8], ['medium', 1], ['large', 1.25]];
+// the assistants she can watch, and their names' labels
+const ASSISTANTS = [['claude', 'watchClaude'], ['codex', 'watchCodex'], ['agy', 'watchAgy']];
 
 // state: { visible, scale, muted, wander, possess, follow, displays: [{ id, label, current }], startAtLogin,
-//          hooks: { installed, error? }, status? }
+//          assistant: 'claude' | 'codex' | 'agy', hooks: { installed, error?, warning?, permission? }, status? }
+//          (hooks: the watched assistant's)
 // act: callbacks named after what they do
 function buildMenu(state, t, act) {
   const sep = { type: 'separator' };
   const hooks = state.hooks || {};
+  const assistant = ASSISTANTS.some(([id]) => id === state.assistant) ? state.assistant : 'claude';
+  const name = t[ASSISTANTS.find(([id]) => id === assistant)[1]];
+  const named = (label) => label.replace('{name}', name);
   const hookItems = hooks.error
-    ? [{ label: t.hooksBroken.replace('{error}', hooks.error), enabled: false }]
+    ? [{ label: named(t.hooksBroken).replace('{error}', hooks.error), enabled: false }]
     : hooks.installed
-      ? [{ label: t.hooksOn, enabled: false }, { label: t.hooksRemove, click: () => act.removeHooks() }]
-      : [{ label: t.hooksOff, click: () => act.installHooks() }];
+      ? [{ label: named(t.hooksOn), enabled: false }, { label: named(t.hooksRemove), click: () => act.removeHooks() }]
+      : [{ label: named(t.hooksOff), click: () => act.installHooks() }];
+  // something in the assistant's own settings that keeps her hooks from running
+  if (hooks.warning && !hooks.error) hookItems.push({ label: hooks.warning, enabled: false });
+  const watch = {
+    label: t.watch,
+    submenu: ASSISTANTS.map(([id, key]) => ({ label: t[key], type: 'radio', checked: id === assistant, click: () => act.watch(id) })),
+  };
+  // opt-in: her card can answer Claude Code's permission prompts (the hook being there is the
+  // setting). Claude Code only: the others' hooks can't answer.
+  const permission = assistant === 'claude'
+    ? [{ label: t.permissions, type: 'checkbox', checked: Boolean(hooks.permission), enabled: !hooks.error, click: () => act.permissions(!hooks.permission) }]
+    : [];
   return [
     { label: state.status || t.online, enabled: false },
     sep,
@@ -54,9 +71,9 @@ function buildMenu(state, t, act) {
     { label: t.jealous, type: 'checkbox', checked: state.jealous !== false, click: () => act.jealous(state.jealous === false) },
     { label: t.startup, type: 'checkbox', checked: Boolean(state.startAtLogin), click: () => act.startup(!state.startAtLogin) },
     sep,
+    watch,
     ...hookItems,
-    // opt-in: her card can answer Claude Code's permission prompts (the hook being there is the setting)
-    { label: t.permissions, type: 'checkbox', checked: Boolean(hooks.permission), enabled: !hooks.error, click: () => act.permissions(!hooks.permission) },
+    ...permission,
     sep,
     { label: t.quit, click: () => act.quit() },
   ];
@@ -102,4 +119,4 @@ function createTray({ Tray, Menu, icon, tooltip = 'Hexa', getMenu }) {
   return { tray, rebuild, popup: (opts) => (menu || rebuild()).popup(opts) };
 }
 
-module.exports = { buildMenu, toModel, createTray, SIZES };
+module.exports = { buildMenu, toModel, createTray, SIZES, ASSISTANTS };

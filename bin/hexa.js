@@ -30,8 +30,10 @@ Talk to Hexa, your desktop companion, from the shell.
   stats [--today|--week|--month] [--json]
   show | hide | toggle               bring her back, send her to the background, or flip it
   demo                               play the demo
-  hooks install|uninstall|status [--assistant claude]
-                                     her Claude Code hooks in ~/.claude/settings.json
+  hooks install|uninstall|status [--assistant claude|codex|agy]
+                                     her hooks: Claude Code's in ~/.claude/settings.json (the
+                                     default), the Codex CLI's in ~/.codex/hooks.json, or
+                                     Antigravity's (agy) in ~/.gemini/config/hooks.json
 
 Exit codes:
   0  done. say, react and notify also exit 0 when Hexa isn't running, after a note on stderr,
@@ -47,6 +49,15 @@ Environment:
 `;
 
 class Usage extends Error {}
+
+// The assistants she has hooks for (src/main/hooks/index.js), and what each is called.
+const ASSISTANTS = { claude: 'Claude Code', codex: 'Codex', agy: 'Antigravity' };
+const ALIASES = { 'claude-code': 'claude', antigravity: 'agy', 'codex-cli': 'codex' };
+const assistantOf = (value) => {
+  const name = String(value).trim().toLowerCase();
+  const id = Object.hasOwn(ALIASES, name) ? ALIASES[name] : name;
+  return Object.hasOwn(ASSISTANTS, id) ? id : null;
+};
 
 // Same rule as src/main/paths.js socketPath(), kept here so the CLI stands alone.
 function socketPath() {
@@ -148,7 +159,10 @@ function requestFor({ command, flags, positional }) {
       if (positional.length !== 1 || !['install', 'uninstall', 'status'].includes(positional[0])) {
         throw new Usage('hooks takes install, uninstall or status');
       }
-      return { method: 'POST', route: '/cli/hooks', body: { action: positional[0], ...(flags.assistant ? { assistant: flags.assistant } : {}) } };
+      if (flags.assistant !== undefined && !assistantOf(flags.assistant)) {
+        throw new Usage(`--assistant takes ${Object.keys(ASSISTANTS).join(', ')} (or antigravity)`);
+      }
+      return { method: 'POST', route: '/cli/hooks', body: { action: positional[0], ...(flags.assistant ? { assistant: assistantOf(flags.assistant) } : {}) } };
     default:
       throw new Usage(`unknown command "${command}"`);
   }
@@ -205,9 +219,16 @@ function describeStatus(b) {
     `Hexa is running${b.pid ? ` (pid ${b.pid})` : ''}, ${b.visible === false ? 'in the background' : 'in front'}.`,
     `Do Not Disturb: ${b.dnd ? 'on' : 'off'}`,
     `Music: ${music}`,
-    `Claude Code sessions: ${b.sessions ?? 0}`,
-    `Hooks: ${b.hooks?.error ? b.hooks.error : b.hooks?.installed ? 'installed' : 'not installed (hexa hooks install)'}`,
+    `${ASSISTANTS[b.assistant] || ASSISTANTS.claude} sessions: ${b.sessions ?? 0}`,
+    `Hooks: ${hooksLine(b.hooks, b.assistant)}`,
   ].join('\n');
+}
+
+function hooksLine(h = {}, assistant = 'claude') {
+  if (h.error) return h.error;
+  const install = assistant && assistant !== 'claude' ? `hexa hooks install --assistant ${assistant}` : 'hexa hooks install';
+  const state = h.installed ? 'installed' : `not installed (${install})`;
+  return h.warning ? `${state}, but ${h.warning}` : state;
 }
 
 function describeSessions(list) {
@@ -224,11 +245,19 @@ function describeStats(b) {
   return lines.length ? lines.join('\n') : 'No stats yet.';
 }
 
-function describeHooks(action, b) {
-  if (action === 'install') return `Hexa hooks installed for ${b.events} events in ${b.file}\nStart a new Claude Code session for them to take effect.`;
+// What to do after installing, for each assistant.
+const NEXT = {
+  claude: 'Start a new Claude Code session for them to take effect.',
+  codex: 'Codex runs only the hooks you trust: start a new Codex session, type /hooks and trust Hexa’s.',
+  agy: 'Restart Antigravity (or start a new conversation) for them to take effect.',
+};
+
+function describeHooks(action, b, assistant = 'claude') {
+  const warning = b.warning ? `\nNote: ${b.warning}` : '';
+  if (action === 'install') return `Hexa hooks installed for ${b.events} events in ${b.file}\n${NEXT[assistant] || NEXT.claude}${warning}`;
   if (action === 'uninstall') return b.removed ? `Hexa hooks removed from ${b.file}` : `No Hexa hooks found in ${b.file}`;
   if (b.error) return b.error;
-  return b.installed ? `Installed (${(b.events || []).join(', ')}) in ${b.file}` : `Not installed (${b.file})`;
+  return (b.installed ? `Installed (${(b.events || []).join(', ')}) in ${b.file}` : `Not installed (${b.file})`) + warning;
 }
 
 // For her ticker: the command as you'd type it.
@@ -354,7 +383,7 @@ async function main(argv) {
   if (command === 'status') out(describeStatus(body));
   else if (command === 'sessions') out(describeSessions(body.sessions));
   else if (command === 'stats') out(describeStats(body));
-  else if (command === 'hooks') out(describeHooks(req.body.action, body));
+  else if (command === 'hooks') out(describeHooks(req.body.action, body, req.body.assistant));
   return EXIT.ok;
 }
 
@@ -363,7 +392,7 @@ function isCommand(word) {
   return ['run', 'help', 'version', '--help', '-h', '--version', '-V'].includes(word) || Object.hasOwn(OPTIONS, word);
 }
 
-module.exports = { main, isCommand, parse, requestFor, display, socketPath, describeStatus, describeSessions, describeStats, EXIT };
+module.exports = { main, isCommand, parse, requestFor, display, socketPath, describeStatus, describeSessions, describeStats, describeHooks, EXIT };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then(

@@ -9,7 +9,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { parse, requestFor, display, describeSessions, describeStatus } = require('../bin/hexa');
+const { parse, requestFor, display, describeSessions, describeStatus, describeHooks } = require('../bin/hexa');
 
 const BIN = path.join(__dirname, '..', 'bin', 'hexa.js');
 const NOWHERE = '/nonexistent/hexa-test/hexa.sock';
@@ -282,6 +282,25 @@ test('parse and requestFor, without a socket', () => {
   assert.throws(() => parse(['status', '--json=yes']), /takes no value/);
 });
 
+test('hooks --assistant: claude, codex or agy (antigravity says agy); anything else is a usage error', () => {
+  const body = (...args) => requestFor(parse(['hooks', ...args])).body;
+  assert.deepEqual(body('install', '--assistant', 'codex'), { action: 'install', assistant: 'codex' });
+  assert.deepEqual(body('status', '--assistant=Antigravity'), { action: 'status', assistant: 'agy' });
+  assert.deepEqual(body('uninstall', '--assistant', 'agy'), { action: 'uninstall', assistant: 'agy' });
+  assert.throws(() => body('install', '--assistant', 'cursor'), /--assistant takes claude, codex, agy/);
+});
+
+test('describe: what to do after installing depends on the assistant; warnings are shown', () => {
+  const r = { file: '/h/.codex/hooks.json', events: 11 };
+  assert.match(describeHooks('install', { ...r, file: '/h/.claude/settings.json', events: 13 }), /13 events.*\nStart a new Claude Code session/);
+  assert.match(describeHooks('install', r, 'codex'), /11 events in \/h\/\.codex\/hooks\.json\n.*\/hooks and trust Hexa/);
+  assert.match(describeHooks('install', r, 'agy'), /Restart Antigravity/);
+  assert.match(describeHooks('install', { ...r, warning: 'Codex has hooks turned off' }, 'codex'), /\nNote: Codex has hooks turned off$/);
+  assert.match(describeHooks('status', { ...r, installed: true, events: ['Stop'], warning: 'off' }, 'codex'), /^Installed \(Stop\).*\nNote: off$/);
+  assert.match(describeStatus({ assistant: 'codex', sessions: 2, hooks: { installed: false } }), /Codex sessions: 2\nHooks: not installed \(hexa hooks install --assistant codex\)/);
+  assert.match(describeStatus({ assistant: 'codex', hooks: { installed: true, warning: 'hooks are off in config.toml' } }), /Hooks: installed, but hooks are off in config\.toml/);
+});
+
 test('display quotes what a shell would need quoted', () => {
   assert.equal(display(['npm', 'test']), 'npm test');
   assert.equal(display(['git', 'commit', '-m', "it's done"]), "git commit -m 'it'\\''s done'");
@@ -323,6 +342,43 @@ test('end to end: the CLI, the real bridge and the app side', async () => {
     assert.equal((await hexa(['say', 'hi', '--face', 'NOT A FACE'], { socket })).code, 1);
     assert.deepEqual(sent.map((e) => [e.hook_event_name, e.phase || e.text]), [['HexaSay', 'hello'], ['HexaRun', 'start'], ['HexaRun', 'end']]);
     assert.equal(sent[2].code, 2);
+  } finally {
+    await bridge.close();
+  }
+});
+
+test('end to end: hexa hooks install --assistant codex, through the bridge, into a temporary $CODEX_HOME', async () => {
+  const { createBridge } = require('../src/main/bridge');
+  const { createCli } = require('../src/main/cli');
+  const assistants = require('../src/main/hooks');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hexa-cli-codex-'));
+  process.env.CODEX_HOME = path.join(root, 'codex'); // the app side reads it: never the real ~/.codex
+  const dataDir = path.join(root, 'data');
+  const appDir = path.join(__dirname, '..');
+  // wired as main.js wires it
+  const cli = createCli({
+    send() {},
+    config: { load: () => ({ visible: true, assistant: 'codex' }) },
+    actions: { toggle() {}, demo() {} },
+    hooks: {
+      install: (a) => assistants.install(a, { appDir, dataDir, hasNode: true }),
+      uninstall: (a) => assistants.uninstall(a),
+      status: (a) => assistants.status(a),
+    },
+  });
+  const socket = tempSocket();
+  const bridge = await createBridge({ socketPath: socket, onEvent() {}, onCli: cli.handle });
+  try {
+    const installed = await hexa(['hooks', 'install', '--assistant', 'codex'], { socket });
+    assert.equal(installed.code, 0, installed.stderr);
+    assert.match(installed.stdout, /installed for 11 events in .*codex\/hooks\.json\n.*\/hooks and trust/);
+    const file = path.join(root, 'codex', 'hooks.json');
+    assert.ok(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.Stop[0].hooks[0].command.includes('hexa-codex-hook.js'));
+    assert.match((await hexa(['hooks', 'status', '--assistant', 'codex'], { socket })).stdout, /^Installed \(SessionStart, /);
+    assert.match((await hexa(['status'], { socket })).stdout, /Codex sessions: 0\nHooks: installed/);
+    assert.match((await hexa(['hooks', 'uninstall', '--assistant', 'codex'], { socket })).stdout, /removed from/);
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), {});
+    assert.equal((await hexa(['hooks', 'install', '--assistant', 'cursor'], { socket })).code, 2, 'a usage error, before asking her');
   } finally {
     await bridge.close();
   }

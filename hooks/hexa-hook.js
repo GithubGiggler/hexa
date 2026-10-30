@@ -6,6 +6,8 @@
 // Reads the hook event on stdin and forwards a trimmed copy to the Hexa app over its Unix socket.
 // Rule #1: never get in Claude's way. No output, always exit 0, give up fast.
 // This file is copied out of the app when the hooks are installed, so it uses Node builtins only.
+// The Codex and Antigravity hooks (hexa-codex-hook.js, hexa-agy-hook.js) are copied next to it and
+// run(adapt) through it: their adapter turns their event into one shaped like Claude's.
 
 const http = require('node:http');
 const os = require('node:os');
@@ -62,7 +64,8 @@ function trim(value, depth = 0) {
 const REPLY_MAX = 6000;
 const PATH_MAX = 4096;
 
-function slim(evt) {
+// assistant: whose hook this is ('claude', 'codex', 'agy'); the event can't say so itself.
+function slim(evt, { assistant = 'claude' } = {}) {
   const out = {};
   for (const key of KEEP) if (evt[key] !== undefined) out[key] = trim(evt[key]);
   const reply = evt.last_assistant_message;
@@ -73,11 +76,22 @@ function slim(evt) {
   }
   // the process that ran this hook: Hexa walks up from it to find the terminal Claude lives in
   out.ppid = process.ppid;
-  out.assistant = 'claude';
+  out.assistant = assistant;
   return out;
 }
 
-function run(adapt = (evt) => evt) {
+// adapt(event): the event as Hexa should see it, or null to send nothing. reply: what to print on
+// stdout before anything else, for an assistant that wants an answer from every hook (Antigravity's
+// "{}": carry on as usual); Claude and Codex get nothing.
+function run(adapt = (evt) => evt, { assistant = 'claude', reply = '' } = {}) {
+  if (reply) {
+    process.stdout.on('error', () => {}); // a closed pipe (EPIPE) mustn't turn into a crash
+    try {
+      process.stdout.write(reply); // a pipe: written at once on Linux, before any exit below
+    } catch {
+      // nobody reading: nothing to tell
+    }
+  }
   const bail = () => process.exit(0);
   setTimeout(bail, 2000).unref();
 
@@ -96,7 +110,7 @@ function run(adapt = (evt) => evt) {
     } catch {
       return bail();
     }
-    const body = JSON.stringify(slim(evt));
+    const body = JSON.stringify(slim(evt, { assistant }));
     const req = http.request({
       socketPath: socketPath(),
       path: '/event',
