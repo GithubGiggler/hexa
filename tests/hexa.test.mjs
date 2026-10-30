@@ -688,3 +688,18 @@ test('no forking in the background or mid-teleport', async () => {
   b.h.teleport({ x: 500, y: 900 });
   assert.equal(await b.h.fork(), false);
 });
+
+test('coming to you, she holds still while your pointer is on her or her card (so you can click its buttons)', () => {
+  const { h, advance } = make();
+  h.onPointer({ x: 1200, y: 700, inside: false });
+  h.comeToPointer();
+  advance(TELEPORT_S);
+  assert.equal(h.mode, 'alert');
+  const spot = { ...h.pos };
+  h.onPointer({ x: 1290, y: 520, inside: true }); // on her card's button
+  advance(1);
+  assert.deepEqual(h.pos, spot);
+  h.onPointer({ x: 400, y: 700, inside: false }); // off you go
+  advance(TELEPORT_S);
+  assert.ok(Math.abs(h.pos.x - spot.x) > 300);
+});

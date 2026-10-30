@@ -17,6 +17,7 @@ const { createOverlay } = require('./overlay');
 const { connect: connectX11 } = require('./platform/linux/x11');
 const autostart = require('./platform/linux/autostart');
 const claudeHooks = require('./hooks/claude');
+const { createPermissions, clampWait } = require('./permissions');
 const { registerPrivileged, registerHexaProtocol } = require('./protocol');
 const { buildMenu, toModel, createTray } = require('./tray');
 const { trayLabels } = require('./labels');
@@ -124,6 +125,20 @@ function start() {
     return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, possess: cfg.possess, follow: cfg.follow, displays, startAtLogin: autostart.isEnabled(), hooks: claudeHooks.status(), status: trayStatus };
   }
 
+  // Answering permissions from her (opt-in; permissions.js). She doesn't offer when she's in the
+  // background, Do Not Disturb is on, or you're away from the computer: Claude asks as usual.
+  let doNotDisturb = false;
+  const permissions = createPermissions({
+    offer: () => {
+      if (config.load().visible === false || doNotDisturb) return false;
+      const idle = powerMonitor.getSystemIdleState(120);
+      return idle !== 'idle' && idle !== 'locked';
+    },
+    show: (card) => send('permission:ask', card),
+    hide: (id) => send('permission:gone', { id }),
+    waitMs: () => clampWait(config.load().permissionWait),
+  });
+
   const actions = {
     toggle: () => {
       const visible = !config.load().visible;
@@ -161,6 +176,16 @@ function start() {
       trayHandle?.rebuild();
     },
     installHooks,
+    permissions: (on) => {
+      try {
+        if (on) claudeHooks.installPermission({ hookSource: path.join(appDir, 'hooks', 'hexa-permission-hook.js'), dataDir: paths.dataDir() });
+        else claudeHooks.uninstallPermission();
+        console.log(`[hexa] answering permissions from her: ${on ? 'on' : 'off'}`);
+      } catch (err) {
+        console.error('[hexa] could not change the permission hook:', err.message);
+      }
+      trayHandle?.rebuild();
+    },
     removeHooks: () => {
       try {
         claudeHooks.uninstall();
@@ -237,6 +262,11 @@ function start() {
       return updateConfig(allowed);
     });
     ipcMain.on('hits:set', (_e, rects) => overlay?.setHitRects(rects));
+    // your click on her permission card: only her own page can send it, and each id answers once
+    ipcMain.on('permission:answer', (e, answer) => {
+      if (e.sender !== overlay?.win.webContents || !answer) return;
+      if (permissions.answer(String(answer.id), String(answer.choice))) console.log(`[hexa] permission answered from her: ${answer.choice}`);
+    });
     // her own menu (a right-click on her): the tray's, as data, drawn by her
     ipcMain.on('menu:open', () => {
       shownMenu = toModel(buildMenu(trayState(), t(), actions));
@@ -347,6 +377,7 @@ function start() {
         },
         onCli,
         onDebug: DEV ? onDebug : undefined,
+        onPermission: (ask, ctx) => permissions.request(ask, ctx),
       });
       console.log(`[hexa] listening on ${paths.socketPath()}`);
     } catch (err) {

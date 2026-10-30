@@ -27,6 +27,10 @@ const EVENTS = [
 ];
 
 const MARK = 'hexa-hook.js';
+// The opt-in permission hook (answer permissions from her): synchronous, so its answer counts.
+// Hexa answers within her wait (60 s at most); the timeout is that plus a margin.
+const PERMISSION_MARK = 'hexa-permission-hook.js';
+const PERMISSION_TIMEOUT = 65;
 
 function settingsPath() {
   const base = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
@@ -48,10 +52,10 @@ function hookCommand({ script, hasNode = nodeOnPath(), exe = process.env.APPIMAG
 }
 
 // The hook is copied to Hexa's data dir so its path never moves (AppImage mounts, app updates).
-function placeHook(hookSource, dataDir) {
+function placeHook(hookSource, dataDir, name = MARK) {
   const dir = path.join(dataDir, 'hooks');
   fs.mkdirSync(dir, { recursive: true });
-  const script = path.join(dir, MARK);
+  const script = path.join(dir, name);
   fs.copyFileSync(hookSource, script);
   fs.chmodSync(script, 0o644);
   return script;
@@ -69,16 +73,17 @@ function readSettings(file) {
   }
 }
 
-function isHexaGroup(group) {
-  return Array.isArray(group?.hooks) && group.hooks.some((h) => String(h.command || '').includes(MARK));
+function isHexaGroup(group, marks = [MARK]) {
+  return Array.isArray(group?.hooks) && group.hooks.some((h) => marks.some((m) => String(h.command || '').includes(m)));
 }
 
-function strip(settings) {
+// Takes Hexa's hooks out (those whose command runs one of marks' scripts), nobody else's.
+function strip(settings, marks = [MARK]) {
   if (!settings.hooks) return settings;
   for (const event of Object.keys(settings.hooks)) {
     const groups = settings.hooks[event];
     if (!Array.isArray(groups)) continue;
-    settings.hooks[event] = groups.filter((g) => !isHexaGroup(g));
+    settings.hooks[event] = groups.filter((g) => !isHexaGroup(g, marks));
     if (settings.hooks[event].length === 0) delete settings.hooks[event];
   }
   if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
@@ -126,15 +131,37 @@ function install({ hookSource, dataDir, hasNode }) {
   return { file, command, events: EVENTS.length, script };
 }
 
-function uninstall() {
+// All of Hexa's hooks, the permission hook too.
+function uninstall({ marks = [MARK, PERMISSION_MARK] } = {}) {
   const file = settingsPath();
   if (!fs.existsSync(file)) return { file, removed: false };
   const settings = readSettings(file);
   const before = JSON.stringify(settings);
-  strip(settings);
+  strip(settings, marks);
   const removed = JSON.stringify(settings) !== before;
   if (removed) write(file, settings);
   return { file, removed };
+}
+
+// Answering permissions from her (opt-in): one synchronous PermissionRequest hook.
+function installPermission({ hookSource, dataDir, hasNode }) {
+  const script = placeHook(hookSource, dataDir, PERMISSION_MARK);
+  const command = hookCommand({ script, hasNode });
+  const file = settingsPath();
+  const original = readSettings(file);
+  const before = JSON.stringify(original);
+  const settings = strip(original, [PERMISSION_MARK]);
+  settings.hooks = settings.hooks || {};
+  settings.hooks.PermissionRequest = [
+    ...(settings.hooks.PermissionRequest || []),
+    { hooks: [{ type: 'command', command, timeout: PERMISSION_TIMEOUT }] },
+  ];
+  if (JSON.stringify(settings) !== before) write(file, settings);
+  return { file, command, script };
+}
+
+function uninstallPermission() {
+  return uninstall({ marks: [PERMISSION_MARK] });
 }
 
 function status() {
@@ -142,11 +169,13 @@ function status() {
   try {
     const settings = readSettings(file);
     const events = Object.entries(settings.hooks || {})
-      .filter(([, groups]) => Array.isArray(groups) && groups.some(isHexaGroup))
+      .filter(([, groups]) => Array.isArray(groups) && groups.some((g) => isHexaGroup(g)))
       .map(([event]) => event);
-    return { file, installed: events.length > 0, events };
+    const permission = Array.isArray(settings.hooks?.PermissionRequest)
+      && settings.hooks.PermissionRequest.some((g) => isHexaGroup(g, [PERMISSION_MARK]));
+    return { file, installed: events.length > 0, events, permission };
   } catch (err) {
-    return { file, installed: false, events: [], error: err.message };
+    return { file, installed: false, events: [], permission: false, error: err.message };
   }
 }
 
@@ -156,4 +185,7 @@ function settingsSnippet({ hookSource, dataDir, hasNode }) {
   return { hooks: groupsFor(hookCommand({ script, hasNode })) };
 }
 
-module.exports = { EVENTS, MARK, settingsPath, hookCommand, install, uninstall, status, settingsSnippet };
+module.exports = {
+  EVENTS, MARK, PERMISSION_MARK, PERMISSION_TIMEOUT, settingsPath, hookCommand,
+  install, uninstall, installPermission, uninstallPermission, status, settingsSnippet,
+};

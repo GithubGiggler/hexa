@@ -21,6 +21,14 @@ export const VERBS = {
 };
 
 // Her guide: what she says while she shows you around (guide.js). One line each, her voice.
+// her permission card's buttons
+export const BUTTONS = {
+  allow: 'Allow',
+  always: 'Always allow {what}',
+  deny: 'Deny',
+  ask: 'Ask in Claude',
+};
+
 export const GUIDE = {
   welcomeHi: 'Hi. I\'m Hexa. I live in your machine now.',
   welcomeWhat: 'I watch Claude Code work and tell you what it\'s up to. Plug me in and I\'ll see everything it does.',
@@ -231,6 +239,11 @@ export const LINES = {
     'Evening. One more feature?',
     'Evening shift. I\'ll keep the lights on.',
     'Long day? I\'ve got the watch.',
+  ],
+  permission: [
+    '{name} needs your OK in {project}.',
+    'Permission check from {project}. Your call.',
+    '{name} wants to do this. Allow it?',
   ],
   fork: [
     'fork()! Say hi, kids.',

@@ -149,3 +149,36 @@ test('tcp needs the token', async () => {
     assert.equal((await request(target, { path: '/health', headers: { 'x-hexa-token': 't0ken', origin: 'http://x' } })).status, 403);
   });
 });
+
+test('/permission waits for onPermission, on the Unix socket only', async () => {
+  let asked = null;
+  const onPermission = async (ask) => { asked = ask; await new Promise((r) => setTimeout(r, 50)); return { behavior: 'allow' }; };
+  await withBridge({ onPermission, tcp: { port: 0, token: 't' } }, async ({ socketPath, bridge }) => {
+    const r = await request({ socketPath }, { method: 'POST', path: '/permission', body: { tool_name: 'Bash' } });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body, { behavior: 'allow' });
+    assert.equal(asked.tool_name, 'Bash');
+    const tcp = await request({ port: bridge.tcpPort }, { method: 'POST', path: '/permission', body: { tool_name: 'Bash' }, headers: { 'x-hexa-token': 't' } });
+    assert.equal(tcp.status, 404, 'nothing over TCP can ask (or answer)');
+  });
+});
+
+test('/permission: a hook that hangs up first is heard through onClose', async () => {
+  let closed = false;
+  let finish;
+  const onPermission = (ask, { onClose }) => new Promise((resolve) => {
+    finish = resolve;
+    onClose(() => { closed = true; resolve(null); });
+  });
+  await withBridge({ onPermission }, async ({ socketPath }) => {
+    await new Promise((resolve) => {
+      const data = JSON.stringify({ tool_name: 'Bash' });
+      const req = http.request({ socketPath, path: '/permission', method: 'POST', headers: { 'content-type': 'application/json', 'content-length': data.length } });
+      req.on('error', () => {});
+      req.end(data);
+      setTimeout(() => { req.destroy(); setTimeout(resolve, 100); }, 100);
+    });
+    assert.equal(closed, true);
+    finish?.(null);
+  });
+});

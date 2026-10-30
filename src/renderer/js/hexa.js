@@ -817,8 +817,9 @@ export class Hexa {
 
   // ---- what you do to her ----
 
+  // inside: the pointer is on her or on her UI (her panel, the HUD...)
   onPointer(p) {
-    this.pointer = { x: p.x, y: p.y };
+    this.pointer = { x: p.x, y: p.y, inside: Boolean(p.inside) };
   }
 
   contains(p) {
@@ -1141,7 +1142,9 @@ export class Hexa {
       }
     }
 
-    if (this.mode === 'alert' && this.pointer) {
+    // coming to you: following your pointer, except while it's on her or her card (its buttons
+    // must stay where you're about to click)
+    if (this.mode === 'alert' && this.pointer && !this.pointer.inside) {
       const t = this.alertTarget();
       if (Math.hypot(t.x - this.pos.x, t.y - this.pos.y) > TELEPORT_FAR) this.teleport(t);
       else this.target = t;

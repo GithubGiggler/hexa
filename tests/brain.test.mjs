@@ -424,3 +424,46 @@ test('a long job: the victory, then her Fork', async () => {
   await short.brain.handle(evt('Stop', { last_assistant_message: 'Done.' }));
   assert.equal(forked, 1, 'a short job: no Fork');
 });
+
+const CARD = { id: 'p-1', session_id: 's1', cwd: '/home/u/projects/penguin-api', project: 'penguin-api', tool_name: 'Bash', tool_input: { command: 'npm test' }, canAlways: true, always: 'Bash(npm test)', waitMs: 10000 };
+
+test('a permission request: she comes to you with a card (Allow, Always allow, Deny, Ask in Claude)', () => {
+  const { brain, calls, said, played } = rig();
+  const answers = [];
+  brain.answerPermission = (id, choice) => answers.push([id, choice]);
+  brain.onPermissionAsk(CARD);
+  assert.ok(has(calls, 'comeToPointer'));
+  assert.ok(played.includes('alert'));
+  const card = said.at(-1);
+  assert.equal(card.kind, 'alert');
+  assert.equal(card.quote, 'RUNS npm test');
+  assert.deepEqual(card.actions.map((a) => a.id), ['allow', 'always', 'deny', 'ask']);
+  assert.match(card.actions[1].label, /Bash\(npm test\)/);
+  card.onAction('allow');
+  assert.deepEqual(answers, [['p-1', 'allow']]);
+  // the panel closed without a choice (clicked away): Claude asks as usual
+  const again = rig();
+  const a2 = [];
+  again.brain.answerPermission = (id, choice) => a2.push([id, choice]);
+  again.brain.onPermissionAsk(CARD);
+  again.said.at(-1).onDismiss();
+  assert.deepEqual(a2, [['p-1', 'ask']]);
+});
+
+test('no Always allow button without a suggestion', () => {
+  const { brain, said } = rig();
+  brain.onPermissionAsk({ ...CARD, canAlways: false, always: '' });
+  assert.deepEqual(said.at(-1).actions.map((a) => a.id), ['allow', 'deny', 'ask']);
+});
+
+test('with her card up, the permission Notification doesn\'t alert twice; the card going ends the wait', () => {
+  const { brain, calls, panel } = rig();
+  brain.onPermissionAsk(CARD);
+  const before = calls.filter((c) => c[0] === 'comeToPointer').length;
+  brain.handle(evt('Notification', { notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' }));
+  assert.equal(calls.filter((c) => c[0] === 'comeToPointer').length, before);
+  brain.onPermissionGone('p-1');
+  assert.ok(calls.some((c) => c[0] === 'clearKind' && c[1] === 'alert'));
+  assert.equal(brain.sessions.get('s1').waiting, false);
+  assert.ok(panel);
+});

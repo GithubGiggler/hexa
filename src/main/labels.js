@@ -29,6 +29,7 @@ const TRAY = {
     hooksOn: 'Claude Code hooks: installed',
     hooksOff: 'Install Claude Code hooks',
     hooksRemove: 'Remove Claude Code hooks',
+    permissions: 'Answer permissions from Hexa',
     hooksBroken: 'Claude Code settings: {error}',
     compositor: 'Transparency needs a compositor (KWin: Alt+Shift+F12)',
     quit: 'Quit',

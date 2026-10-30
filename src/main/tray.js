@@ -52,6 +52,8 @@ function buildMenu(state, t, act) {
     { label: t.startup, type: 'checkbox', checked: Boolean(state.startAtLogin), click: () => act.startup(!state.startAtLogin) },
     sep,
     ...hookItems,
+    // opt-in: her card can answer Claude Code's permission prompts (the hook being there is the setting)
+    { label: t.permissions, type: 'checkbox', checked: Boolean(hooks.permission), enabled: !hooks.error, click: () => act.permissions(!hooks.permission) },
     sep,
     { label: t.quit, click: () => act.quit() },
   ];

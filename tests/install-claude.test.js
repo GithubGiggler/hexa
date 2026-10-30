@@ -152,3 +152,49 @@ test('a new settings.json is created readable only by you', () => {
   claude.install(opts(dataDir));
   assert.equal(fs.statSync(file).mode & 0o777, 0o600);
 });
+
+const PERMISSION_HOOK = path.join(__dirname, '..', 'hooks', 'hexa-permission-hook.js');
+const permOpts = (dataDir) => ({ hookSource: PERMISSION_HOOK, dataDir, hasNode: true });
+
+test('the permission hook: one synchronous PermissionRequest hook, its own script, a bounded timeout', () => {
+  const { dataDir, file } = fresh();
+  const r = claude.installPermission(permOpts(dataDir));
+  const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.deepEqual(Object.keys(settings.hooks), ['PermissionRequest']);
+  const entry = settings.hooks.PermissionRequest[0].hooks[0];
+  assert.equal(entry.type, 'command');
+  assert.equal(entry.async, undefined, 'its answer has to count: not async');
+  assert.equal(entry.timeout, claude.PERMISSION_TIMEOUT);
+  assert.match(entry.command, /hexa-permission-hook\.js/);
+  assert.ok(fs.existsSync(r.script));
+  assert.equal(claude.status().permission, true);
+  claude.installPermission(permOpts(dataDir));
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.PermissionRequest.length, 1, 'installing twice adds it once');
+});
+
+test('re-installing her event hooks keeps the permission hook; removing her hooks removes both', () => {
+  const { dataDir, file } = fresh();
+  claude.installPermission(permOpts(dataDir));
+  claude.install(opts(dataDir));
+  let settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(settings.hooks.PermissionRequest.length, 1);
+  assert.equal(Object.keys(settings.hooks).length, 14);
+  claude.uninstallPermission();
+  settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(settings.hooks.PermissionRequest, undefined);
+  assert.equal(Object.keys(settings.hooks).length, 13, 'her event hooks stay');
+  claude.installPermission(permOpts(dataDir));
+  claude.uninstall();
+  assert.equal(fs.existsSync(file) && JSON.parse(fs.readFileSync(file, 'utf8')).hooks, undefined);
+  assert.equal(claude.status().permission, false);
+});
+
+test('someone else\'s PermissionRequest hooks are left alone', () => {
+  const { dataDir, file } = fresh();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const theirs = { hooks: [{ type: 'command', command: '/usr/local/bin/my-guard' }] };
+  fs.writeFileSync(file, JSON.stringify({ hooks: { PermissionRequest: [theirs] } }));
+  claude.installPermission(permOpts(dataDir));
+  claude.uninstallPermission();
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.PermissionRequest, [theirs]);
+});

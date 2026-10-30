@@ -95,17 +95,20 @@ export class Panel {
       r.appendChild(renderBlocks(parseMarkdown(reply), doc));
       body.appendChild(r);
     }
+    const buttons = [];
     if (actions.length) {
       const row = el(doc, 'div', 'hx-actions');
       for (const a of actions) {
         const b = el(doc, 'button', a.primary ? 'hx-button hx-button--primary' : 'hx-button', a.label);
         b.type = 'button';
         b.addEventListener('click', (e) => {
+          if (!e.isTrusted) return; // only your own click: never one a script made up
           e.stopPropagation(); // a button isn't also a click to close the panel
           this.hide({ answered: true });
           onAction?.(a.id);
         });
         row.appendChild(b);
+        buttons.push([a.id, b]);
       }
       body.appendChild(row);
     }
@@ -117,7 +120,7 @@ export class Panel {
     this.root.appendChild(card);
 
     const id = this.nextId++;
-    this.current = { id, kind, line: String(line), shown: 0, card, lineEl, portrait, face, glitchUntil: this.now() + 90, start: this.now(), hold, doneAt: null, onDismiss };
+    this.current = { id, kind, line: String(line), shown: 0, card, lineEl, portrait, face, glitchUntil: this.now() + 90, start: this.now(), hold, doneAt: null, onDismiss, buttons };
     this.drawFace();
     this.place();
     return id;
@@ -202,5 +205,13 @@ export class Panel {
     if (!card) return [];
     const r = card.getBoundingClientRect();
     return r.width && r.height ? [[r.left, r.top, r.width, r.height]] : [];
+  }
+
+  // where the current card's buttons are, by action id (for her debug state)
+  buttonRects() {
+    return (this.current?.buttons || []).map(([id, b]) => {
+      const r = b.getBoundingClientRect();
+      return { id, rect: [r.left, r.top, r.width, r.height] };
+    });
   }
 }

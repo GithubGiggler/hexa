@@ -52,6 +52,9 @@ const hud = new Hud({ root: ui, onPick: (id) => brain.focusSession(id) });
 host.onMenu(({ items }) => menu.show(items, menuAt, area, { x: 0, y: 0, w: innerWidth, h: innerHeight }));
 host.onMenuKey((key) => menu.key(key));
 const brain = new Brain({ hexa, panel, voice, lang: cfg.lang || 'en' });
+brain.answerPermission = (id, choice) => host.answerPermission(id, choice);
+host.onPermission((card) => brain.onPermissionAsk(card));
+host.onPermissionGone(({ id }) => brain.onPermissionGone(id));
 brain.linked = cfg.linked;
 brain.watching = cfg.claude;
 brain.onLinked = () => host.setConfig({ linked: true });
@@ -137,6 +140,7 @@ host.answerState(() => ({
   menu: menu.open,
   hud: hud.rects(),
   forks: hexa.forks.length,
+  buttons: panel.buttonRects(),
 }));
 
 // ---- the mouse, on her ----

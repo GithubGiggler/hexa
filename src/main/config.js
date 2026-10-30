@@ -25,6 +25,7 @@ const DEFAULTS = {
   shortcut: 'Ctrl+Alt+H',
   startAtLogin: false,
   tcp: false,          // also listen on 127.0.0.1:47823 (with a token), for tools that can't use the socket
+  permissionWait: 10,  // seconds her permission card waits for your click (5 to 60), then Claude asks as usual
 };
 
 let cache = null;

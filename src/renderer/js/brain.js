@@ -226,6 +226,7 @@ export class Brain {
 
   onNotification(evt, s) {
     const type = evt.notification_type;
+    if (ALERTS.has(type) && s.permission) return; // it's already on her card
     if (ALERTS.has(type)) {
       s.waiting = true;
       this.voice.play('alert');
@@ -277,6 +278,48 @@ export class Brain {
   claudeWindow() {
     const s = [...this.sessions.values()].filter((v) => v.window).sort((a, b) => b.seen - a.seen)[0];
     return (s && this.windows.wins.find((w) => w.id === s.window)) || null;
+  }
+
+  // A PermissionRequest hook is waiting for you (main sends the card; you opted in). She comes to
+  // your pointer with it; your click answers through answerPermission (set by app.js). Closing the
+  // card without a choice means "ask in Claude".
+  onPermissionAsk(card) {
+    const s = this.session({ session_id: card.session_id, cwd: card.cwd });
+    s.waiting = true;
+    s.permission = card.id;
+    this.voice.play('alert');
+    const action = describeTool({ tool_name: card.tool_name, tool_input: card.tool_input }, this.t.verbs);
+    const b = this.t.buttons;
+    const actions = [
+      { id: 'allow', label: b.allow, primary: true },
+      ...(card.canAlways ? [{ id: 'always', label: fmt(b.always, { what: clip(card.always, 40) }) }] : []),
+      { id: 'deny', label: b.deny },
+      { id: 'ask', label: b.ask },
+    ];
+    let answered = false;
+    const answer = (choice) => {
+      if (answered) return;
+      answered = true;
+      s.permission = null;
+      this.answerPermission?.(card.id, choice);
+      if (this.hexa.mode === 'alert' || this.hexa.alerting) this.hexa.setMode(s.working ? 'work' : 'idle');
+    };
+    this.say('alert', this.line('permission', s), s, {
+      face: 'wide', quote: `${action.verb} ${action.target}`.trim(), hold: null, actions, onAction: answer, onDismiss: () => answer('ask'),
+    });
+    this.panel.setTicker({ verb: 'WAITING', target: 'for you', state: 'waiting' });
+    this.hexa.comeToPointer();
+  }
+
+  // No answer in time, or the hook hung up (answered in the terminal): the card goes.
+  onPermissionGone(id) {
+    for (const s of this.sessions.values()) {
+      if (s.permission !== id) continue;
+      s.permission = null;
+      s.waiting = false;
+      this.panel.clearKind('alert');
+      if (this.hexa.mode === 'alert' || this.hexa.alerting) this.hexa.setMode(s.working ? 'work' : 'idle');
+    }
   }
 
   // A chip in the HUD clicked: she points at that session's window and brings you its last

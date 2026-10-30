@@ -71,7 +71,7 @@ function probe(socketPath) {
   });
 }
 
-function handler({ onEvent, onCli, onDebug, token }) {
+function handler({ onEvent, onCli, onDebug, onPermission, token }) {
   return async (req, res) => {
     // Browsers always send an Origin header on cross-site requests; hooks and the CLI never do.
     if (req.headers.origin) return send(res, 403, { ok: false });
@@ -90,6 +90,20 @@ function handler({ onEvent, onCli, onDebug, token }) {
         }
         onEvent(evt);
         return send(res, 200, { ok: true });
+      }
+
+      // A PermissionRequest hook asking her, and waiting (only on the Unix socket, never TCP). If
+      // the hook hangs up first (Claude moved on), onPermission hears it through onClose.
+      if (onPermission && !token && req.method === 'POST' && url.pathname === '/permission') {
+        const ask = await readJson(req);
+        if (!ask || typeof ask !== 'object') return send(res, 400, { ok: false });
+        const closers = [];
+        res.on('close', () => {
+          if (!res.writableFinished) closers.forEach((fn) => fn());
+        });
+        const answer = await onPermission(ask, { onClose: (fn) => closers.push(fn) });
+        if (!res.writableEnded && !res.destroyed) send(res, 200, answer || { behavior: null });
+        return undefined;
       }
 
       if (onCli && url.pathname.startsWith('/cli/')) {
@@ -124,13 +138,13 @@ function listen(server, ...args) {
   });
 }
 
-async function createBridge({ socketPath, onEvent, onCli, onDebug, tcp = null }) {
+async function createBridge({ socketPath, onEvent, onCli, onDebug, onPermission, tcp = null }) {
   ensurePrivateDir(path.dirname(socketPath));
   const state = await probe(socketPath);
   if (state === 'live') throw new Error(`already running: another Hexa answers on ${socketPath}`);
   if (state === 'stale') fs.rmSync(socketPath, { force: true });
 
-  const local = http.createServer(handler({ onEvent, onCli, onDebug }));
+  const local = http.createServer(handler({ onEvent, onCli, onDebug, onPermission }));
   await listen(local, socketPath);
   fs.chmodSync(socketPath, 0o600);
 
