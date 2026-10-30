@@ -22,7 +22,7 @@ live=${HEXA_LIVE_DIR:-$(mktemp -d)}
 mkdir -p "$live"
 live=$(cd "$live" && pwd)
 rm -f "$live/status" "$live/result"
-export HEXA_LIVE_CMD="$*"
+export HEXA_LIVE_CMD=$(printf '%q ' "$@") # each argument kept whole
 
 # where the results folder shows up inside (outside /tmp, which is private in there)
 inner=$(mktemp -d -p "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" hexa-live.XXXXXX)
@@ -31,7 +31,12 @@ echo "hidden desktop: $live" >&2
 timeout --kill-after=5 "$(( ${HEXA_LIVE_TIMEOUT:-180} + 20 ))" \
   unshare --user --map-root-user --mount --pid --fork --mount-proc --net --kill-child \
   python3 -I "$here/namespace.py" "$live" "$inner" "$(id -u)" "$(id -g)" \
-  bash "$here/in-namespace.sh" "$inner"
+  bash "$here/in-namespace.sh" "$inner" &
+runner=$!
+# stopped from outside (Ctrl+C, a timeout around this script): take the hidden desktop down too
+# (its runner is our own child; --kill-child ends everything inside when it goes)
+trap 'kill -TERM "$runner" 2>/dev/null; wait "$runner" 2>/dev/null; rmdir "$inner" 2>/dev/null; exit 130' INT TERM
+wait "$runner"
 rmdir "$inner" 2>/dev/null
 
 cat "$live/result" 2>/dev/null

@@ -358,7 +358,12 @@ async function main(argv) {
   return EXIT.ok;
 }
 
-module.exports = { parse, requestFor, display, socketPath, describeStatus, describeSessions, describeStats, EXIT };
+// Is word one of the CLI's commands? (A packaged Hexa's own binary is the CLI for these: main.js.)
+function isCommand(word) {
+  return ['run', 'help', 'version', '--help', '-h', '--version', '-V'].includes(word) || Object.hasOwn(OPTIONS, word);
+}
+
+module.exports = { main, isCommand, parse, requestFor, display, socketPath, describeStatus, describeSessions, describeStats, EXIT };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then(

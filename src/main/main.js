@@ -77,7 +77,23 @@ try {
 
 let quitReason = 'a signal or the session ending';
 
-if (!app.requestSingleInstanceLock()) {
+// `hexa status`, `hexa say hi`...: in a packaged install her binary is also the CLI (bin/hexa.js).
+// The first argument that isn't a Chromium flag or the app's folder decides: one of the CLI's
+// commands, and the CLI runs and exits without starting her.
+function cliArgs(argv) {
+  const words = argv.slice(1).filter((a, i) => !(i === 0 && (a === '.' || a === appDir)) && !/^--(no-sandbox|dev|enable-|disable-|ozone)/.test(a));
+  const cli = require('../../bin/hexa');
+  return words.length && cli.isCommand(words[0]) ? { cli, args: words } : null;
+}
+const asCli = cliArgs(process.argv);
+
+if (asCli) {
+  // (process.exit, not app.exit: this runs before Electron is ready, and she never starts)
+  asCli.cli.main(asCli.args).then((code) => process.exit(code ?? 0), (err) => {
+    process.stderr.write(`hexa: ${err.message}\n`);
+    process.exit(1);
+  });
+} else if (!app.requestSingleInstanceLock()) {
   console.log('[hexa] another Hexa is already running: this one quits');
   quitReason = 'another Hexa is already running';
   app.quit();
