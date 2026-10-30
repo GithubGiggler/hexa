@@ -24,6 +24,7 @@ const { createCapture } = require('./platform/linux/capture');
 const { registerPrivileged, registerHexaProtocol } = require('./protocol');
 const { buildMenu, toModel, createTray } = require('./tray');
 const { trayLabels } = require('./labels');
+const { resolveLang } = require('./lang');
 const { screen } = require('electron');
 const { playDemo } = require('./demo');
 const { startX11Windows } = require('./platform/linux/windows-x11');
@@ -120,11 +121,13 @@ function start() {
     icon: path.join(appDir, 'assets', 'icons', 'hexa-128.png'),
   });
 
-  const t = () => trayLabels('en');
+  // her language: the config's, or 'auto' from your locale (lang.js); menus and lines both follow it
+  const lang = () => resolveLang(config.load().lang, process.env);
+  const t = () => trayLabels(lang());
   const send = (channel, payload) => {
     if (overlay && !overlay.win.isDestroyed()) overlay.win.webContents.send(channel, payload);
   };
-  const rendererConfig = () => ({ ...config.load(), reducedMotion, lang: 'en', packUrl: 'hexa://app/packs/hexa/pack.json' });
+  const rendererConfig = () => ({ ...config.load(), reducedMotion, lang: lang(), packUrl: 'hexa://app/packs/hexa/pack.json' });
 
   function updateConfig(patch) {
     config.save(patch);
@@ -148,7 +151,8 @@ function start() {
 
   function trayState() {
     const cfg = config.load();
-    const displays = screen.getAllDisplays().map((d, i) => ({ id: d.id, label: `Screen ${i + 1} (${d.bounds.width}×${d.bounds.height})`, current: d.id === overlay?.display.id }));
+    const screenName = t().display;
+    const displays = screen.getAllDisplays().map((d, i) => ({ id: d.id, label: `${screenName.replace('{n}', i + 1)} (${d.bounds.width}×${d.bounds.height})`, current: d.id === overlay?.display.id }));
     return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, possess: cfg.possess, follow: cfg.follow, displays, startAtLogin: autostart.isEnabled(), hooks: claudeHooks.status(), status: trayStatus };
   }
 
