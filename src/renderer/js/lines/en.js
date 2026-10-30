@@ -27,6 +27,12 @@ export const BUTTONS = {
   always: 'Always allow {what}',
   deny: 'Deny',
   ask: 'Ask in Claude',
+  // her consent card before she uses your computer, and her questions while she does
+  consent: 'I\'d use your mouse and keyboard for this. Esc stops me any time.',
+  start: 'Start',
+  cancel: 'Cancel',
+  yes: 'Yes',
+  no: 'No',
 };
 
 export const GUIDE = {

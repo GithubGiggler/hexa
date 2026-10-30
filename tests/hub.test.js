@@ -91,3 +91,9 @@ test('what she knows about you goes into who she is', () => {
   assert.match(s, /Segfault/);
   assert.doesNotMatch(chatSystem({ tools: false }), /remember/i);
 });
+
+test('she answers in your language', () => {
+  const { chatSystem } = require('../src/main/brain/persona');
+  assert.match(chatSystem({ lang: 'de' }), /Answer in German/);
+  assert.doesNotMatch(chatSystem({ lang: 'en' }), /Answer in/);
+});

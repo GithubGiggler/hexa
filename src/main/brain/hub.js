@@ -14,6 +14,7 @@ const { ollama, claudeBrain, DEFAULT_CLAUDE } = require('./providers');
 const { createChat } = require('./chat');
 const { createActions } = require('./actions');
 const { runComputerTask } = require('./computer');
+const { resolveLang } = require('../lang');
 
 const TIERS = ['normal', 'bigger', 'max'];
 
@@ -134,7 +135,7 @@ function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dat
     actions,
     onEvent: (e) => send('chat:event', e),
     // who she is to you: what she calls you, what you asked her to remember, how close you are
-    persona: () => ({ user: cfg().userName || 'you', memories: cfg().memories || [], stage: bond?.stage() || null, days: bond?.days() || 0 }),
+    persona: () => ({ user: cfg().userName || 'you', memories: cfg().memories || [], stage: bond?.stage() || null, days: bond?.days() || 0, lang: resolveLang(cfg().lang) }),
   });
 
   // "call me …", "remember that …", "forget everything": hers to answer, no model needed. Each one

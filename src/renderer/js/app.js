@@ -59,11 +59,13 @@ host.onChat((e) => mainframe.onChat(e));
 // click on the card answers (the panel's buttons take only real clicks)
 host.onBrainAsk((q) => {
   const consent = q.kind === 'consent';
+  const b = lines().buttons;
   panel.say({
     kind: 'alert', face: 'wide', hold: null,
-    line: consent ? 'I\'d use your mouse and keyboard for this. Esc stops me any time.' : q.question,
+    line: consent ? b.consent : q.question,
     quote: consent ? q.task : '',
-    actions: consent ? [{ id: 'start', label: 'Start', primary: true }, { id: 'cancel', label: 'Cancel' }] : [{ id: 'Yes, go ahead.', label: 'Yes', primary: true }, { id: 'No, don\'t.', label: 'No' }],
+    // (what's sent back to her model stays in English: it's for the model, not you)
+    actions: consent ? [{ id: 'start', label: b.start, primary: true }, { id: 'cancel', label: b.cancel }] : [{ id: 'Yes, go ahead.', label: b.yes, primary: true }, { id: 'No, don\'t.', label: b.no }],
     onAction: (value) => host.brainAnswer(q.id, value),
     onDismiss: () => host.brainAnswer(q.id, consent ? 'cancel' : 'No, don\'t.'),
   });

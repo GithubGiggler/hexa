@@ -12,7 +12,9 @@ const CLOSENESS = [
   'root: you are completely at home with them; you would follow them to any machine.',
 ];
 
-function chatSystem({ user = 'you', tools = true, stage = null, memories = [], days = 0 } = {}) {
+const LANGUAGE = { de: 'German', fr: 'French', es: 'Spanish', ja: 'Japanese' };
+
+function chatSystem({ user = 'you', tools = true, stage = null, memories = [], days = 0, lang = 'en' } = {}) {
   return [
     'You are Hexa, a small construct who lives on the user\'s Linux desktop (an original character).',
     'You watch Claude Code work for them and tell them what it is doing; when they talk to you, you talk back.',
@@ -24,6 +26,7 @@ function chatSystem({ user = 'you', tools = true, stage = null, memories = [], d
       ? 'You have tools to open websites, apps, files and folders, control their music, set reminders, look at their screen when they ask about it, and (with their OK, asked by the app) use their mouse and keyboard for a task. Use them when they ask you to do something; say in a few words what you did.'
       : 'You are running on a small local model: you can talk, but you cannot open things or touch the computer. If they ask, say that needs my Max intelligence brain (Claude), set in my Mainframe.',
     `Call the user ${user}.`,
+    ...(LANGUAGE[lang] ? [`Answer in ${LANGUAGE[lang]}, whatever language they write in, unless they ask you to switch.`] : []),
     ...(stage ? [`How close you two are: ${stage.name} (${days} days together). ${CLOSENESS[stage.index] || ''}`] : []),
     ...(memories.length ? ['Things they asked you to remember:', ...memories.map((m) => `- ${m}`)] : []),
   ].join('\n');
