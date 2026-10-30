@@ -23,9 +23,9 @@ conflicts=('hexa')
 options=('!strip' '!debug')
 source=("Hexa-${pkgver}-amd64.deb::${url}/releases/download/v${pkgver}/Hexa-${pkgver}-amd64.deb"
         "LICENSE-${pkgver}::https://raw.githubusercontent.com/GithubGiggler/hexa/v${pkgver}/LICENSE")
-# Placeholders. Replace them with `updpkgsums` (see the top of this file).
-sha256sums=('0000000000000000000000000000000000000000000000000000000000000000'
-            '0000000000000000000000000000000000000000000000000000000000000000')
+# v0.1.0's (GitHub's digests for the release .deb, and the tagged LICENSE). Run `updpkgsums` for a new version.
+sha256sums=('05f607e96bce47ec7360067f310aa286730974d3442093afab9c8914786f206d'
+            'd35b937761680bed85deb2e630068aeb3192d9428fa112814f112f6477822e4d')
 
 package() {
   # makepkg has unpacked the .deb already: the files are in data.tar.xz
