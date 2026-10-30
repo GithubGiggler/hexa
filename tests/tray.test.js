@@ -112,3 +112,27 @@ test('Usage and stats opens the stats window, whether she is out or in the backg
   }
   assert.deepEqual(hit, ['stats', 'stats']);
 });
+
+// ---- her menu in every language ----
+
+test('her menu is there in every language, every label of it', () => {
+  const { TRAY, LANGS } = require('../src/main/labels');
+  assert.deepEqual(LANGS, ['en', 'de', 'fr', 'es', 'ja']);
+  const holes = (s) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
+  for (const lang of LANGS) {
+    assert.deepEqual(Object.keys(TRAY[lang]).sort(), Object.keys(TRAY.en).sort(), lang);
+    for (const [key, label] of Object.entries(TRAY[lang])) {
+      assert.ok(typeof label === 'string' && label.trim(), `${lang}.${key}`);
+      assert.deepEqual(holes(label), holes(TRAY.en[key]), `${lang}.${key}: placeholders`);
+      assert.ok(!/capri|カプリ/i.test(label), `${lang}.${key}: no upstream character name`);
+    }
+    // the menu builds in it, and nothing on it is left blank
+    const displays = [{ id: 1, label: TRAY[lang].display.replace('{n}', 1), current: true }];
+    const menu = buildMenu({ ...base, displays }, trayLabels(lang), noop);
+    const labels = menu.flatMap((i) => [i, ...(i.submenu || [])]).filter((i) => i.type !== 'separator').map((i) => i.label);
+    assert.ok(labels.every((l) => typeof l === 'string' && l.length), lang);
+  }
+  assert.equal(trayLabels('de').quit, 'Beenden');
+  assert.equal(trayLabels('ja').display.replace('{n}', 2), '画面2');
+  assert.equal(trayLabels('xx').quit, 'Quit', 'unknown languages get English');
+});

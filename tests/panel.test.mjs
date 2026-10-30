@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { placePanel } from '../src/renderer/js/panel.js';
+import { placePanel, VOICED } from '../src/renderer/js/panel.js';
 
 const area = { x: 0, y: 0, w: 2560, h: 1440 };
 const size = { w: 420, h: 160 };
@@ -49,4 +49,9 @@ test('the ticker is just a label: it never takes a click', async () => {
   assert.deepEqual(panel.rects(), [], 'nothing clickable for a ticker alone');
   panel.say({ kind: 'info', line: 'hi' });
   assert.equal(panel.rects().length, 1, 'the panel itself is clickable');
+});
+
+test('she blips while typing in every language, not on punctuation', () => {
+  for (const voiced of ['Hi', 'été', 'Größe', 'ñoño', 'つ', 'ア', '編', 'ー', 'É']) assert.ok(VOICED.test(voiced), voiced);
+  for (const quiet of ['Strg', '!? ', '。、！？', '{n}', '42', '…']) assert.ok(!VOICED.test(quiet), quiet);
 });

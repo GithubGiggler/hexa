@@ -450,6 +450,16 @@ test('a permission request: she comes to you with a card (Allow, Always allow, D
   assert.deepEqual(a2, [['p-1', 'ask']]);
 });
 
+test('in German her card, its buttons and the ticker verb are German', () => {
+  const { brain, said } = rig();
+  brain.lang = 'de';
+  brain.onPermissionAsk(CARD);
+  const card = said.at(-1);
+  assert.equal(card.quote, 'STARTET npm test');
+  assert.deepEqual(card.actions.map((a) => a.label), ['Erlauben', 'Immer erlauben: Bash(npm test)', 'Ablehnen', 'In Claude fragen']);
+  assert.ok(!/Allow|Deny/.test(card.line), card.line);
+});
+
 test('no Always allow button without a suggestion', () => {
   const { brain, said } = rig();
   brain.onPermissionAsk({ ...CARD, canAlways: false, always: '' });

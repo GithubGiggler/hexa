@@ -31,6 +31,8 @@ const ctx = canvas.getContext('2d');
 const ui = document.getElementById('ui');
 
 let cfg = await host.getConfig();
+// her language, resolved by the main process; on the page too, so Japanese gets Japanese glyphs
+document.documentElement.lang = cfg.lang || 'en';
 const pack = await loadPack(cfg.packUrl);
 const rig = buildRig(pack);
 const player = new Player();
@@ -252,6 +254,8 @@ host.onLinuxState((state) => {
 
 host.onConfig((c) => {
   cfg = c;
+  brain.lang = c.lang || 'en';
+  document.documentElement.lang = brain.lang;
   voice.setVolume(c.volume);
   hexa.setScale(c.scale);
   applySettings();

@@ -1,8 +1,14 @@
-// Her lines by language. English is the fallback for anything missing.
+// Her lines by language. English is the fallback for anything missing. The main process resolves
+// her language (src/main/lang.js) and hands the renderer a code from LANGS; its menu labels list
+// the same languages (src/main/labels.js). Adding one: docs/translating.md.
 
 import * as en from './en.js';
+import * as de from './de.js';
+import * as fr from './fr.js';
+import * as es from './es.js';
+import * as ja from './ja.js';
 
-const TABLES = { en };
+const TABLES = { en, de, fr, es, ja };
 
 export const LANGS = Object.keys(TABLES);
 

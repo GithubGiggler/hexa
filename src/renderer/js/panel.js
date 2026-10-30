@@ -8,6 +8,8 @@ import { parseMarkdown, renderBlocks } from './markdown.js';
 const GAP = 14;
 const TYPE_MS = 22;     // per character
 const PRIORITY = { alert: 3, error: 2, done: 2, work: 1, info: 1, idle: 0 };
+// what gets a blip as it types: vowels, accented ones too, and kana and kanji (a syllable each)
+export const VOICED = /[aeiouyàáâäãåæèéêëìíîïòóôöõøœùúûüýÿ\u3041-\u30ff\u3400-\u9fff]/i;
 
 // Where the panel goes: above her if there's room, else beside her on the roomier side; always
 // inside the area, never on top of her.
@@ -164,7 +166,7 @@ export class Panel {
     const target = Math.min(c.line.length, Math.floor((now - c.start) / TYPE_MS));
     if (target > c.shown) {
       const typed = c.line.slice(c.shown, target);
-      if (/[aeiouy]/i.test(typed)) this.voice?.play('blip');
+      if (VOICED.test(typed)) this.voice?.play('blip');
       c.shown = target;
       c.lineEl.textContent = c.line.slice(0, c.shown);
       if (c.shown === c.line.length) c.doneAt = now;
