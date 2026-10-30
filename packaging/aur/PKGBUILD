@@ -1,0 +1,42 @@
+# Maintainer: OWNER <OWNER@users.noreply.github.com>
+#
+# hexa-bin: Hexa from the release .deb, repackaged for Arch Linux.
+#
+# To update it for a new release:
+#   1. Set pkgver to the new version and pkgrel back to 1.
+#   2. Run `updpkgsums` (from pacman-contrib). It downloads both sources and writes their
+#      sha256 into sha256sums below. Until then the zeros make makepkg refuse to build.
+#   3. Run `makepkg --printsrcinfo > .SRCINFO` and commit both files to the AUR repo.
+
+pkgname=hexa-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Desktop companion that narrates what Claude Code is doing'
+arch=('x86_64')
+url='https://github.com/OWNER/hexa'
+license=('MIT')
+depends=('gtk3' 'nss' 'alsa-lib' 'libnotify' 'libxtst' 'xdg-utils')
+optdepends=('nodejs: runs the Claude Code hook (without it the hook runs on Hexa itself)'
+            'gnome-shell-extension-appindicator: her tray icon on GNOME')
+provides=('hexa')
+conflicts=('hexa')
+options=('!strip' '!debug')
+source=("Hexa-${pkgver}-amd64.deb::${url}/releases/download/v${pkgver}/Hexa-${pkgver}-amd64.deb"
+        "LICENSE-${pkgver}::https://raw.githubusercontent.com/OWNER/hexa/v${pkgver}/LICENSE")
+# Placeholders. Replace them with `updpkgsums` (see the top of this file).
+sha256sums=('0000000000000000000000000000000000000000000000000000000000000000'
+            '0000000000000000000000000000000000000000000000000000000000000000')
+
+package() {
+  # makepkg has unpacked the .deb already: the files are in data.tar.xz
+  bsdtar -xf data.tar.xz -C "$pkgdir"
+
+  # The .deb's install script makes this link, and pacman doesn't run that script.
+  install -d "$pkgdir/usr/bin"
+  ln -s /opt/Hexa/hexa "$pkgdir/usr/bin/hexa"
+
+  # Only Ubuntu's AppArmor setup uses this.
+  rm -f "$pkgdir/opt/Hexa/resources/apparmor-profile"
+
+  install -Dm644 "LICENSE-${pkgver}" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
