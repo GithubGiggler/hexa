@@ -2,7 +2,7 @@
 
 All notable changes to Hexa. Versions follow [Semantic Versioning](https://semver.org/).
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-29)
 
 The first version: Hexa on Linux, watching Claude Code.
 
