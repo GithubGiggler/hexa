@@ -5,6 +5,9 @@
   "main": "src/main/main.js",
   "private": true,
   "license": "MIT",
+  "author": "Hexa contributors",
+  "homepage": "https://github.com/OWNER/hexa",
+  "desktopName": "hexa.desktop",
   "keywords": [
     "claude-code",
     "desktop-pet",
@@ -27,10 +30,17 @@
     "live:hud": "tools/live/hidden-desktop.sh node tools/live/hud.js",
     "live:permission": "tools/live/hidden-desktop.sh node tools/live/permission.js",
     "live:fork": "tools/live/hidden-desktop.sh node tools/live/fork.js",
-    "live:brain": "tools/live/hidden-desktop.sh node tools/live/brain.js"
+    "live:brain": "tools/live/hidden-desktop.sh node tools/live/brain.js",
+    "dist": "electron-builder --linux",
+    "dist:appimage": "electron-builder --linux AppImage --x64",
+    "dist:deb": "electron-builder --linux deb --x64",
+    "dist:rpm": "electron-builder --linux rpm --x64",
+    "dist:pacman": "electron-builder --linux pacman --x64",
+    "dist:tar": "electron-builder --linux tar.gz --x64",
+    "dist:dir": "electron-builder --linux dir --x64"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.134.0",
@@ -40,6 +50,108 @@
     "x11": "4.3.1"
   },
   "devDependencies": {
-    "electron": "44.7.1"
+    "electron": "44.7.1",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "io.github.hexa_desktop.hexa",
+    "productName": "Hexa",
+    "executableName": "hexa",
+    "copyright": "Copyright (c) 2026 Hexa contributors",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "beforeBuild": "scripts/icon-set.js",
+    "files": [
+      "**/*",
+      "!{tests,tools,docs,scripts,packaging,captures,build,dist,.superpowers,.claude}{,/**/*}",
+      "!*.md",
+      "README.md"
+    ],
+    "asarUnpack": [
+      "src/main/platform/linux/kwin-script/**",
+      "hooks/**"
+    ],
+    "artifactName": "Hexa-${version}-${arch}.${ext}",
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "pacman",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Utility",
+      "icon": "build/icons",
+      "synopsis": "Desktop companion that narrates what Claude Code is doing",
+      "description": "Desktop companion that narrates what Claude Code is doing",
+      "maintainer": "Hexa contributors <OWNER@users.noreply.github.com>",
+      "vendor": "Hexa contributors",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "Hexa"
+        }
+      }
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnss3",
+        "libgbm1",
+        "libasound2",
+        "libatspi2.0-0",
+        "libnotify4",
+        "libxtst6",
+        "xdg-utils"
+      ],
+      "recommends": []
+    },
+    "rpm": {
+      "depends": [
+        "libgtk-3.so.0()(64bit)",
+        "libnss3.so()(64bit)",
+        "libgbm.so.1()(64bit)",
+        "libasound.so.2()(64bit)",
+        "libnotify.so.4()(64bit)",
+        "libXtst.so.6()(64bit)",
+        "xdg-utils"
+      ]
+    },
+    "pacman": {
+      "depends": [
+        "gtk3",
+        "nss",
+        "alsa-lib",
+        "libnotify",
+        "libxtst",
+        "xdg-utils"
+      ]
+    }
   }
 }

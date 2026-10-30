@@ -4,3 +4,5 @@ captures/
 *.log
 .DS_Store
 .superpowers/
+build/
+.claude/worktrees/
