@@ -15,6 +15,7 @@ import { pick, fmt } from './util.js';
 import { Guide } from './guide.js';
 import { Menu } from './menu.js';
 import { Hud, sessionRows } from './hud.js';
+import { Mainframe, TaskCard } from './mainframe.js';
 
 const host = window.host;
 const HIT_EVERY_MS = 33;
@@ -49,6 +50,42 @@ const panel = new Panel({ root: ui, voice, glyphs: pack.glyphs, palette: pack.pa
 const menu = new Menu({ root: ui, onPick: (id) => host.menuPick(id), onClose: () => host.menuClosed() });
 let menuAt = { x: 0, y: 0 };
 const hud = new Hud({ root: ui, onPick: (id) => brain.focusSession(id) });
+const mainframe = new Mainframe({ root: ui, host });
+const taskCard = new TaskCard({ root: ui });
+host.onChat((e) => mainframe.onChat(e));
+// her consent card before she touches your computer, and her questions while she does: your
+// click on the card answers (the panel's buttons take only real clicks)
+host.onBrainAsk((q) => {
+  const consent = q.kind === 'consent';
+  panel.say({
+    kind: 'alert', face: 'wide', hold: null,
+    line: consent ? 'I\'d use your mouse and keyboard for this. Esc stops me any time.' : q.question,
+    quote: consent ? q.task : '',
+    actions: consent ? [{ id: 'start', label: 'Start', primary: true }, { id: 'cancel', label: 'Cancel' }] : [{ id: 'Yes, go ahead.', label: 'Yes', primary: true }, { id: 'No, don\'t.', label: 'No' }],
+    onAction: (value) => host.brainAnswer(q.id, value),
+    onDismiss: () => host.brainAnswer(q.id, consent ? 'cancel' : 'No, don\'t.'),
+  });
+  if (consent) voice.play('alert');
+});
+host.onBrainGone(() => panel.clearKind('alert'));
+let computerRunning = false;
+let keysSeen = 0; // for her debug state
+addEventListener('keydown', () => { keysSeen++; }, true);
+host.onComputerStart(({ task }) => {
+  computerRunning = true;
+  mainframe.close();
+  taskCard.start(task);
+  // out of your way: into the corner, working
+  hexa.teleport({ x: area.x + hexa.size.w * 0.7, y: area.y + area.h }, () => hexa.setMode('work'));
+});
+host.onComputerStep((step) => taskCard.step(step));
+host.onComputerEnd((out) => {
+  computerRunning = false;
+  taskCard.end(out);
+  hexa.setMode('idle');
+  const line = out.outcome === 'stopped' ? 'Stopped. I let go of everything.' : out.text || 'Done.';
+  panel.say({ kind: out.outcome === 'done' ? 'done' : 'info', line, face: out.outcome === 'done' ? 'laugh' : 'calm', hold: 7000 });
+});
 host.onMenu(({ items }) => menu.show(items, menuAt, area, { x: 0, y: 0, w: innerWidth, h: innerHeight }));
 host.onMenuKey((key) => menu.key(key));
 const brain = new Brain({ hexa, panel, voice, lang: cfg.lang || 'en' });
@@ -100,6 +137,12 @@ host.onArea((a) => fit(a));
 
 host.onEvent((evt) => {
   if (evt.hook_event_name === 'HexaShowcase') return showcase();
+  if (evt.hook_event_name === 'HexaReminder') {
+    hexa.comeToPointer();
+    voice.play('alert');
+    panel.say({ kind: 'alert', line: String(evt.text || ''), tag: 'reminder', face: 'wide', hold: 12000 });
+    return undefined;
+  }
   return brain.handle(evt);
 });
 
@@ -108,6 +151,7 @@ host.onCommand(({ name, on }) => {
   else if (name === 'teleport') hexa.teleport();
   else if (name === 'lurk') { if (!hexa.lurk()) hexa.onSay('noLurk'); }
   else if (name === 'fork') hexa.fork();
+  else if (name === 'mainframe') mainframe.toggle();
   else if (name === 'resume') brain.resume();
   else if (name === 'showcase') showcase();
   else if (name === 'guide') guide.menu();
@@ -141,6 +185,10 @@ host.answerState(() => ({
   hud: hud.rects(),
   forks: hexa.forks.length,
   buttons: panel.buttonRects(),
+  mainframe: mainframe.open,
+  chat: mainframe.log.textContent.slice(-300),
+  task: taskCard.box.hidden ? '' : taskCard.box.textContent,
+  typing: { hasFocus: document.hasFocus(), active: document.activeElement?.className || '', value: mainframe.input.value, keys: keysSeen },
 }));
 
 // ---- the mouse, on her ----
@@ -242,7 +290,8 @@ function frame(now) {
   }
   if (now - lastHits >= HIT_EVERY_MS) {
     lastHits = now;
-    const rects = [...body, ...panel.rects(), ...hud.rects(), ...menu.rects()].map((r) => r.map((v) => Math.round(v)));
+    // while she uses your computer, every click goes through (she must never catch one)
+    const rects = (computerRunning ? [] : [...body, ...panel.rects(), ...hud.rects(), ...mainframe.rects(), ...menu.rects()]).map((r) => r.map((v) => Math.round(v)));
     const key = JSON.stringify(rects);
     if (key !== sentHits) {
       sentHits = key;

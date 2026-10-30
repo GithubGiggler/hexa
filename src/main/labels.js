@@ -9,6 +9,7 @@ const TRAY = {
     online: 'Hexa: online',
     hide: 'Send to background',
     show: 'Bring her back',
+    talk: 'Talk to me',
     teleport: 'Teleport',
     lurk: 'Watch my window',
     fork: 'Fork',

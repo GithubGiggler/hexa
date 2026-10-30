@@ -307,3 +307,105 @@ html, body {
 .hud-chip.done .hud-led { background: var(--green); }
 .hud-chip.done .hud-label { color: var(--green); }
 .hud-chip.idle .hud-label { color: var(--muted); }
+
+/* her Mainframe: chat with her, and her brain */
+.mainframe {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 440px;
+  background: rgba(20, 26, 46, 0.97);
+  border: 1px solid rgba(62, 242, 255, 0.55);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  font-size: 13px;
+}
+.mf-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(62, 242, 255, 0.22);
+}
+.mf-title {
+  flex: 1;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--cyan);
+}
+.mf-tab, .mf-small, .mf-close {
+  font: inherit;
+  color: var(--white);
+  background: none;
+  border: 1px solid rgba(62, 242, 255, 0.3);
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.mf-tab.on { background: var(--magenta); border-color: var(--magenta); }
+.mf-close { border: none; font-size: 16px; padding: 0 4px; }
+.mf-pane { padding: 10px; }
+.mf-log {
+  height: 220px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+.mf-line { white-space: pre-wrap; word-break: break-word; }
+.mf-who { margin-right: 6px; color: var(--muted); }
+.mf-hexa .mf-who { color: var(--magenta); font-weight: 600; }
+.mf-hexa .mf-text { color: var(--white); }
+.mf-you .mf-text { color: var(--cyan); }
+.mf-sys .mf-text { color: var(--amber); }
+.mf-row { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.mf-prompt { font-family: 'JetBrains Mono', monospace; color: var(--cyan); }
+.mf-input, .mf-select {
+  flex: 1;
+  font: 12px 'JetBrains Mono', monospace;
+  color: var(--white);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(62, 242, 255, 0.3);
+  padding: 5px 7px;
+  outline: none;
+}
+.mf-input:focus { border-color: var(--cyan); }
+.mf-hint { color: var(--muted); font-size: 12px; margin: 4px 0 8px; }
+.mf-tier {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin: 4px 0;
+  border: 1px solid rgba(62, 242, 255, 0.18);
+  cursor: pointer;
+}
+.mf-tier.on { border-color: var(--magenta); background: rgba(255, 62, 165, 0.08); }
+.mf-tier-text { flex: 1; display: flex; flex-direction: column; }
+.mf-note { color: var(--muted); font-size: 12px; }
+.mf-tag { color: var(--amber); font-size: 11px; }
+.mf-check { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 4px; color: var(--white); font-size: 12px; }
+
+/* her task card while she uses your computer: clicks go through it */
+.taskcard {
+  position: fixed;
+  left: 20px;
+  top: 20px;
+  width: 360px;
+  padding: 8px 10px;
+  background: rgba(20, 26, 46, 0.92);
+  border: 1px solid rgba(62, 242, 255, 0.55);
+  pointer-events: none;
+  font: 12px 'JetBrains Mono', monospace;
+  color: var(--white);
+}
+.tc-head { display: flex; gap: 6px; margin-bottom: 4px; }
+.tc-who { color: var(--magenta); font-weight: 600; }
+.tc-state { flex: 1; }
+.tc-esc { color: var(--amber); }
+.tc-task { color: var(--cyan); margin-bottom: 4px; }
+.tc-more { color: var(--muted); }
+.tc-step::before { content: '· '; color: var(--muted); }
+.tc-note { color: var(--muted); }
+.tc-ask { color: var(--amber); }

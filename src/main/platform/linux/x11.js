@@ -5,6 +5,7 @@
 // routed by the X server itself with no pointer polling. Window tracking (M2) joins it here.
 
 const x11 = require('x11');
+const { createInput } = require('./input');
 
 const call = (fn) => new Promise((resolve, reject) => fn((err, value) => (err ? reject(err) : resolve(value))));
 
@@ -45,6 +46,12 @@ async function connect() {
   } catch {
     // no SHAPE extension: the overlay falls back to pointer polling
   }
+  let Test = null;
+  try {
+    Test = await call((cb) => X.require('xtest', cb));
+  } catch {
+    // no XTEST: she can't use your computer (computer use stays off)
+  }
 
   return {
     X,
@@ -69,6 +76,24 @@ async function connect() {
       const atom = await call((cb) => X.InternAtom(false, `_NET_WM_CM_S${display.screenNum || 0}`, cb));
       const owner = await call((cb) => X.GetSelectionOwner(atom, cb));
       return owner !== 0;
+    },
+
+    // Her hands, for computer use (input.js). Null without XTEST.
+    hasInput: Boolean(Test),
+    input() {
+      return Test ? createInput({ X, root, Test, call, minKeycode: display.min_keycode, maxKeycode: display.max_keycode }) : null;
+    },
+
+    // Keyboard focus for her own window while you type to her (the window manager never focuses an
+    // override-redirect window). Resolves the window that had it, to give it back.
+    async takeFocus(xid) {
+      const before = await call((cb) => X.GetInputFocus(cb)).catch(() => null);
+      X.SetInputFocus(xid, 1); // revert to PointerRoot
+      await call((cb) => X.GetInputFocus(cb)).catch(() => null);
+      return before?.focus ?? 0;
+    },
+    giveFocus(wid) {
+      if (wid > 1) X.SetInputFocus(wid, 1);
     },
 
     // A round trip: every request sent before it has been handled when it resolves.

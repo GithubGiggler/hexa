@@ -26,12 +26,14 @@
     "test:x": "tools/live/hidden-desktop.sh env HEXA_TEST_X=1 node --test tests/x11.test.js tests/windows-x11.test.js",
     "live:hud": "tools/live/hidden-desktop.sh node tools/live/hud.js",
     "live:permission": "tools/live/hidden-desktop.sh node tools/live/permission.js",
-    "live:fork": "tools/live/hidden-desktop.sh node tools/live/fork.js"
+    "live:fork": "tools/live/hidden-desktop.sh node tools/live/fork.js",
+    "live:brain": "tools/live/hidden-desktop.sh node tools/live/brain.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.134.0",
     "@fontsource/chakra-petch": "5.3.0",
     "@fontsource/jetbrains-mono": "5.3.0",
     "dbus-next": "0.10.2",

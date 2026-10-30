@@ -26,6 +26,9 @@ const DEFAULTS = {
   startAtLogin: false,
   tcp: false,          // also listen on 127.0.0.1:47823 (with a token), for tools that can't use the socket
   permissionWait: 10,  // seconds her permission card waits for your click (5 to 60), then Claude asks as usual
+  brain: 'normal',     // her brain when you talk to her: 'normal' / 'bigger' (local, Ollama) or 'max' (Claude)
+  brainModels: {},     // the model picked for each brain; unset: the smallest / biggest local one, Claude Opus 5.5
+  computerUse: false,  // she may use your mouse and keyboard for a task you ask (Claude only, asks first every time)
 };
 
 let cache = null;

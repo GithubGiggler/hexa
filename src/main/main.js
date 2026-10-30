@@ -8,7 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
 const {
-  app, Tray, Menu, ipcMain, protocol, net, shell, globalShortcut, nativeImage, powerMonitor,
+  app, Tray, Menu, ipcMain, protocol, net, shell, globalShortcut, nativeImage, powerMonitor, desktopCapturer,
 } = require('electron');
 const paths = require('./paths');
 const config = require('./config');
@@ -18,6 +18,9 @@ const { connect: connectX11 } = require('./platform/linux/x11');
 const autostart = require('./platform/linux/autostart');
 const claudeHooks = require('./hooks/claude');
 const { createPermissions, clampWait } = require('./permissions');
+const { createHub } = require('./brain/hub');
+const { createSecrets } = require('./secrets');
+const { createCapture } = require('./platform/linux/capture');
 const { registerPrivileged, registerHexaProtocol } = require('./protocol');
 const { buildMenu, toModel, createTray } = require('./tray');
 const { trayLabels } = require('./labels');
@@ -85,6 +88,8 @@ function start() {
     }
   }
   let x11 = null;
+  let hub = null;
+  let focusBefore = 0; // the window that had the keyboard before you typed to her
   let reducedMotion = false;
   let trayStatus = null;
   let stopDemo = null;
@@ -148,6 +153,7 @@ function start() {
     },
     teleport: () => send('hexa:command', { name: 'teleport' }),
     lurk: () => send('hexa:command', { name: 'lurk' }),
+    talk: () => send('hexa:command', { name: 'mainframe' }),
     fork: () => send('hexa:command', { name: 'fork' }),
     guide: () => send('hexa:command', { name: 'guide' }),
     demo: () => {
@@ -313,6 +319,44 @@ function start() {
       return null; // no panel on this screen
     });
     ipcMain.handle('hooks:install', () => installHooks());
+
+    // her Mainframe (brain/hub.js); only her own page may ask
+    const fromHer = (e) => e.sender === overlay?.win.webContents;
+    ipcMain.handle('brain:status', (e) => (fromHer(e) ? hub.status() : null));
+    ipcMain.handle('brain:models', (e, tier) => (fromHer(e) ? hub.listModels(String(tier)).catch((err) => ({ error: err.message })) : null));
+    ipcMain.handle('brain:set', (e, patch) => (fromHer(e) ? hub.set(patch && typeof patch === 'object' ? patch : {}) : null));
+    ipcMain.handle('brain:key', (e, key) => {
+      if (!fromHer(e)) return null;
+      try {
+        if (key) hub.saveKey(String(key));
+        else hub.clearKey();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    });
+    ipcMain.on('chat:send', (e, text) => { if (fromHer(e)) hub.send(String(text || '')); });
+    ipcMain.on('chat:stop', (e) => { if (fromHer(e)) hub.stop(); });
+    ipcMain.on('chat:reset', (e) => { if (fromHer(e)) hub.reset(); });
+    // your click on her consent or question card (each id answers once)
+    ipcMain.on('brain:answer', (e, a) => { if (fromHer(e) && a) hub.answer(String(a.id), String(a.value)); });
+    ipcMain.on('computer:stop', (e) => { if (fromHer(e)) hub.stopComputer(); });
+    // the keyboard, while you type to her
+    // (her window is made unfocusable, and Chromium drops keys for such a window: focusable only
+    // while you type to her)
+    ipcMain.handle('focus:take', async (e) => {
+      if (!fromHer(e) || !x11 || !overlay?.xid) return false;
+      overlay.win.setFocusable(true);
+      const before = await x11.takeFocus(overlay.xid);
+      if (before && before !== overlay.xid) focusBefore = before;
+      return true;
+    });
+    ipcMain.on('focus:give', (e) => {
+      if (!fromHer(e)) return;
+      overlay?.win.setFocusable(false);
+      if (x11 && focusBefore) x11.giveFocus(focusBefore);
+      focusBefore = 0;
+    });
     ipcMain.on('debug:state', (_e, { id, state }) => {
       const resolve = pendingState.get(id);
       if (resolve) {
@@ -329,6 +373,23 @@ function start() {
     if (!x11) console.warn('[hexa] no X11 connection: falling back to pointer polling for click-through');
     reducedMotion = await detectReducedMotion();
     registerIpc();
+
+    // her brain: chat, her actions, computer use (brain/hub.js)
+    hub = createHub({
+      config, secrets: createSecrets(), send, shell, x11,
+      capture: createCapture({ desktopCapturer, getDisplay: () => overlay.display, cursor: () => screen.getCursorScreenPoint() }),
+      // Escape is hers only while she has your mouse and keyboard
+      grabEscape: (stop) => {
+        globalShortcut.register('Escape', stop);
+        return () => globalShortcut.unregister('Escape');
+      },
+      dataDir: paths.dataDir(),
+      onReminder: (text) => send('hexa:event', { hook_event_name: 'HexaReminder', text, demo: true }),
+      // the live checks' scripted Claude (dev mode only; tools/ isn't shipped)
+      makeClaude: DEV && process.env.HEXA_FAKE_CLAUDE
+        ? () => require(path.join(appDir, 'tools', 'live', 'fake-claude.js')).createFakeClaude(process.env.HEXA_FAKE_CLAUDE)
+        : null,
+    });
 
     overlay = createOverlay({
       preload: path.join(__dirname, '..', 'preload.js'),

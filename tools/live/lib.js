@@ -35,9 +35,9 @@ const post = (evt) => request('POST', '/event', { session_id: 'live', cwd: '/hom
 const alive = () => request('GET', '/health').then(() => true, () => false);
 
 // Hexa from this checkout, in dev mode (her debug routes on). Resolves once her socket answers.
-async function startHexa() {
+async function startHexa({ env = {} } = {}) {
   const electron = path.join(root, 'node_modules', '.bin', 'electron');
-  const child = spawn(electron, ['.', '--dev'], { cwd: root, stdio: 'ignore' });
+  const child = spawn(electron, ['.', '--dev'], { cwd: root, stdio: 'ignore', env: { ...process.env, ...env } });
   const gone = new Promise((r) => child.once('exit', r));
   for (let i = 0; i < 80; i++) {
     if (await alive()) {
@@ -83,6 +83,16 @@ async function display() {
     press(button) { Test.FakeInput(Test.ButtonPress, button, 0, rootWin, 0, 0); },
     release(button) { Test.FakeInput(Test.ButtonRelease, button, 0, rootWin, 0, 0); },
     key(code) {
+      Test.FakeInput(Test.KeyPress, code, 0, rootWin, 0, 0);
+      Test.FakeInput(Test.KeyRelease, code, 0, rootWin, 0, 0);
+    },
+    // a lowercase letter or digit, as on a US layout (evdev keycodes)
+    typeChar(ch) {
+      const rows = ['1234567890', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+      const starts = [10, 24, 38, 52];
+      const r = rows.findIndex((row) => row.includes(ch));
+      if (r < 0) return;
+      const code = starts[r] + rows[r].indexOf(ch);
       Test.FakeInput(Test.KeyPress, code, 0, rootWin, 0, 0);
       Test.FakeInput(Test.KeyRelease, code, 0, rootWin, 0, 0);
     },

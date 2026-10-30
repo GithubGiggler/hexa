@@ -20,6 +20,7 @@ function buildMenu(state, t, act) {
     { label: state.status || t.online, enabled: false },
     sep,
     state.visible ? { label: t.hide, click: () => act.toggle() } : { label: t.show, click: () => act.toggle() },
+    { label: t.talk, enabled: Boolean(state.visible), click: () => act.talk() },
     { label: t.teleport, enabled: Boolean(state.visible), click: () => act.teleport() },
     { label: t.lurk, enabled: Boolean(state.visible), click: () => act.lurk() },
     { label: t.fork, enabled: Boolean(state.visible), click: () => act.fork() },
