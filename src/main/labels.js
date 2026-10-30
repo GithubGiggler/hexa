@@ -13,6 +13,7 @@ const TRAY = {
     lurk: 'Watch my window',
     demo: 'Play demo',
     help: 'How does it work?',
+    stats: 'Usage and stats',
     size: 'Size',
     small: 'Small',
     medium: 'Medium',

@@ -24,6 +24,7 @@ function buildMenu(state, t, act) {
     { label: t.lurk, enabled: Boolean(state.visible), click: () => act.lurk() },
     { label: t.demo, click: () => act.demo() },
     { label: t.help, click: () => act.guide() },
+    { label: t.stats, click: () => act.stats() },
     sep,
     {
       label: t.size,
