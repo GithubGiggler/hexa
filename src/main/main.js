@@ -21,6 +21,8 @@ const { createPermissions, clampWait } = require('./permissions');
 const { createHub } = require('./brain/hub');
 const { createSecrets } = require('./secrets');
 const { createCapture } = require('./platform/linux/capture');
+const { createVoiceInput } = require('./brain/voice-input');
+const { startSense } = require('./platform/linux/sense');
 const { registerPrivileged, registerHexaProtocol } = require('./protocol');
 const { buildMenu, toModel, createTray } = require('./tray');
 const { trayLabels } = require('./labels');
@@ -427,6 +429,17 @@ function start() {
     // your click on her consent or question card (each id answers once)
     ipcMain.on('brain:answer', (e, a) => { if (fromHer(e) && a) hub.answer(String(a.id), String(a.value)); });
     ipcMain.on('computer:stop', (e) => { if (fromHer(e)) hub.stopComputer(); });
+    // talking to her out loud: whisper.cpp on your machine (brain/voice-input.js)
+    const voiceInput = createVoiceInput({ dataDir: paths.dataDir() });
+    ipcMain.handle('voice:status', (e) => (fromHer(e) ? voiceInput.available() : null));
+    ipcMain.handle('voice:transcribe', async (e, audio) => {
+      if (!fromHer(e)) return null;
+      try {
+        return { text: await voiceInput.transcribe(audio) };
+      } catch (err) {
+        return { error: err.message };
+      }
+    });
     // the keyboard, while you type to her
     // (her window is made unfocusable, and Chromium drops keys for such a window: focusable only
     // while you type to her)
@@ -477,6 +490,9 @@ function start() {
         : null,
     });
 
+    // she feels her machine: CPU, memory, battery, heat (platform/linux/sense.js)
+    startSense({ onTrouble: (t) => send('hexa:event', { hook_event_name: 'HexaSense', ...t, demo: true }) });
+
     overlay = createOverlay({
       preload: path.join(__dirname, '..', 'preload.js'),
       url: 'hexa://app/src/renderer/index.html',
@@ -484,6 +500,10 @@ function start() {
       displayId: cfg.displayId,
     });
     console.log(`[hexa] overlay on display ${overlay.display.id} (${overlay.display.bounds.width}×${overlay.display.bounds.height}), click-through by ${overlay.mode}`);
+    // her page may use the microphone (only for talking to her: voice-input.js), nothing else
+    overlay.win.webContents.session.setPermissionRequestHandler((wc, permission, allow, details) => {
+      allow(wc === overlay.win.webContents && permission === 'media' && (details.mediaTypes || []).every((t) => t === 'audio'));
+    });
     // in dev mode her page's warnings and errors land in her log too
     if (DEV) {
       overlay.win.webContents.on('console-message', (e) => {

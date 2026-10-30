@@ -56,6 +56,13 @@ export class Mainframe {
     this.input.maxLength = 4000;
     this.input.spellcheck = false;
     row.append(this.input);
+    // talk out loud (whisper.cpp on your machine): shown when it's set up
+    this.mic = el('button', 'mf-small mf-mic', 'mic');
+    this.mic.type = 'button';
+    this.mic.hidden = true;
+    this.mic.title = 'Talk to me out loud (click again to stop)';
+    this.mic.addEventListener('click', () => this.toggleMic());
+    row.append(this.mic);
     row.addEventListener('submit', (e) => {
       e.preventDefault();
       this.submit();
@@ -164,6 +171,8 @@ export class Mainframe {
 
   async refresh() {
     this.render(await this.host.brainStatus());
+    const voice = await this.host.voiceStatus();
+    this.mic.hidden = !voice?.ok;
   }
 
   render(s) {
@@ -203,6 +212,42 @@ export class Mainframe {
       this.model.append(o);
     }
     if (!list.length) this.note(tier === 'max' ? 'No models: is your key right?' : 'No local models: install Ollama, then `ollama pull llama3.2`.');
+  }
+
+  // Recording what you say (at most 30 s), then her ears: the text goes in as if you typed it.
+  async toggleMic() {
+    if (this.recorder) {
+      this.recorder.stop();
+      return;
+    }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      this.line('sys', 'no microphone I may use');
+      return;
+    }
+    const chunks = [];
+    const rec = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+    this.recorder = rec;
+    this.mic.textContent = '● rec';
+    this.mic.classList.add('on');
+    const limit = setTimeout(() => rec.state === 'recording' && rec.stop(), 30000);
+    rec.ondataavailable = (e) => chunks.push(e.data);
+    rec.onstop = async () => {
+      clearTimeout(limit);
+      stream.getTracks().forEach((t) => t.stop());
+      this.recorder = null;
+      this.mic.textContent = 'mic';
+      this.mic.classList.remove('on');
+      const audio = new Uint8Array(await new Blob(chunks).arrayBuffer());
+      const r = await this.host.transcribe(audio);
+      if (r?.text) {
+        this.line('you', r.text);
+        this.host.chatSend(r.text);
+      } else this.line('sys', r?.error || 'I didn\'t catch that');
+    };
+    rec.start();
   }
 
   submit() {

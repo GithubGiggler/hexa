@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('host', {
   onComputerStep: on('computer:step'),
   onComputerEnd: on('computer:end'),
   stopComputer: () => ipcRenderer.send('computer:stop'),
+  voiceStatus: () => ipcRenderer.invoke('voice:status'),
+  transcribe: (audio) => ipcRenderer.invoke('voice:transcribe', audio),
   takeFocus: () => ipcRenderer.invoke('focus:take'),
   giveFocus: () => ipcRenderer.send('focus:give'),
   onPermission: on('permission:ask'),

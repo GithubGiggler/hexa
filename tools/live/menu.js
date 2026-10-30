@@ -8,7 +8,7 @@
 //
 //   tools/live/hidden-desktop.sh node tools/live/menu.js
 
-const { wait, state, alive, request, startHexa, display, checks } = require('./lib');
+const { downsTo, wait, state, alive, request, startHexa, display, checks } = require('./lib');
 
 const KEY = { Escape: 9, Down: 116, Return: 36 }; // evdev keycodes, as Xwayland uses
 
@@ -46,10 +46,11 @@ const KEY = { Escape: 9, Down: 116, Return: 36 }; // evdev keycodes, as Xwayland
 
     await rightClick();
     const before = (await state()).pos;
-    await key('Down'); await key('Down'); await key('Return'); // Hide, Teleport: Enter
+    for (let n = await downsTo('Teleport'); n > 0; n--) await key('Down');
+    await key('Return');
     await wait(2600);
     s = await state();
-    check('Down, Down, Enter picks Teleport', s.menu === false && Math.hypot(s.pos.x - before.x, s.pos.y - before.y) > 20,
+    check('the arrows and Enter pick Teleport', s.menu === false && Math.hypot(s.pos.x - before.x, s.pos.y - before.y) > 20,
       `menu ${s.menu}, moved ${Math.round(Math.hypot(s.pos.x - before.x, s.pos.y - before.y))} px`);
     check('she is still running', await alive());
   } catch (err) {

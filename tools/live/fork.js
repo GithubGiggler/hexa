@@ -5,7 +5,7 @@
 //
 //   tools/live/hidden-desktop.sh node tools/live/fork.js
 
-const { wait, state, request, startHexa, display, checks } = require('./lib');
+const { downsTo, wait, state, request, startHexa, display, checks } = require('./lib');
 
 const KEY = { Down: 116, Return: 36 };
 
@@ -19,7 +19,8 @@ const KEY = { Down: 116, Return: 36 };
     const body = s.hitRects[0];
     d.move(s.display.x + body[0] + body[2] / 2, s.display.y + body[1] + body[3] / 2); await d.sync(); await wait(200);
     d.press(3); await d.sync(); await wait(80); d.release(3); await d.sync(); await wait(600);
-    for (const k of ['Down', 'Down', 'Down', 'Down', 'Return']) { d.key(KEY[k]); await d.sync(); await wait(200); } // Hide, Teleport, Watch, Fork
+    for (let n = await downsTo('Fork'); n > 0; n--) { d.key(KEY.Down); await d.sync(); await wait(150); }
+    d.key(KEY.Return); await d.sync(); await wait(200);
     await wait(2700);
     s = await state();
     check('seven copies out', s.forks === 7, `forks ${s.forks}`);

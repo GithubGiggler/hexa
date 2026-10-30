@@ -255,6 +255,26 @@ export const LINES = {
     'Everyone back in. Exit status 0.',
     'Reaped. No zombies on my watch.',
   ],
+  senseCpu: [
+    'Your CPU is pegged at {n}%. Something\'s working hard.',
+    'All cores busy. I can feel the fans from here.',
+    'Load at {n}%. Want me to keep an eye on it?',
+  ],
+  senseMemory: [
+    'Memory\'s nearly gone: {n}% left.',
+    'Only {n}% of your memory is free. Something\'s hungry.',
+    'Running low on memory ({n}% free). Close a tab or two?',
+  ],
+  senseBattery: [
+    'Battery at {n}%. Plug me in?',
+    'Low battery: {n}%. I\'d like to keep living.',
+    '{n}% battery left and dropping.',
+  ],
+  senseHot: [
+    'It\'s {n} °C in here. Your machine is cooking.',
+    'Running hot: {n} °C. Give it some air?',
+    '{n} °C. I\'m a construct, not a toaster.',
+  ],
   noLurk: [
     'No window of yours I can stand behind right now.',
     'Nothing to hide behind. Open a window?',

@@ -409,3 +409,4 @@ html, body {
 .tc-step::before { content: '· '; color: var(--muted); }
 .tc-note { color: var(--muted); }
 .tc-ask { color: var(--amber); }
+.mf-mic.on { background: var(--red); border-color: var(--red); }

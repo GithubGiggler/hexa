@@ -111,6 +111,14 @@ async function display() {
   };
 }
 
+// With her menu open: how many Downs from the top reach the item labelled `label`.
+async function downsTo(label) {
+  const labels = (await state()).menuLabels.filter((l) => l !== null);
+  const i = labels.indexOf(label);
+  if (i < 0) throw new Error(`no "${label}" in her menu: ${labels.join(', ')}`);
+  return i + 1;
+}
+
 // PASS/FAIL lines; exit status 1 when anything failed.
 function checks() {
   const lines = [];
@@ -128,4 +136,4 @@ function checks() {
   };
 }
 
-module.exports = { wait, request, state, post, alive, startHexa, display, checks, root };
+module.exports = { wait, request, state, post, alive, startHexa, display, checks, downsTo, root };

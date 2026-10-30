@@ -10,7 +10,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { wait, state, startHexa, display, checks } = require('./lib');
+const { downsTo, wait, state, startHexa, display, checks } = require('./lib');
 
 const KEY = { Down: 116, Return: 36 };
 const TASK = 'type hexa in the test window';
@@ -69,7 +69,8 @@ const call = (fn) => new Promise((res, rej) => fn((e, v) => (e ? rej(e) : res(v)
     const body = s.hitRects[0];
     d.move(s.display.x + body[0] + body[2] / 2, s.display.y + body[1] + body[3] / 2); await d.sync(); await wait(200);
     d.press(3); await d.sync(); await wait(80); d.release(3); await d.sync(); await wait(600);
-    for (const k of ['Down', 'Down', 'Return']) { d.key(KEY[k]); await d.sync(); await wait(200); }
+    for (let n = await downsTo('Talk to me'); n > 0; n--) { d.key(KEY.Down); await d.sync(); await wait(150); }
+    d.key(KEY.Return); await d.sync(); await wait(200);
     await wait(900);
     s = await state();
     check('Talk to me opens her Mainframe', s.mainframe === true);

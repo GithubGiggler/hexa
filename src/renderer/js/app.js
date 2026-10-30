@@ -174,6 +174,18 @@ host.onEvent((evt) => {
     }
     return undefined;
   }
+  // her machine in trouble (main: sense.js); quiet under Do Not Disturb
+  if (evt.hook_event_name === 'HexaSense') {
+    if (linux.dnd) return undefined;
+    const key = { cpu: 'senseCpu', memory: 'senseMemory', battery: 'senseBattery', hot: 'senseHot' }[evt.kind];
+    const n = evt.load ?? evt.free ?? evt.percent ?? evt.temp;
+    const t = lines();
+    if (key && t[key]) {
+      hexa.attend();
+      panel.say({ kind: 'info', line: fmt(pick(t[key]), { ...vars, n }), face: evt.kind === 'hot' || evt.kind === 'battery' ? 'wide' : 'squint', hold: 6000 });
+    }
+    return undefined;
+  }
   if (evt.hook_event_name === 'HexaReminder') {
     hexa.comeToPointer();
     voice.play('alert');
@@ -232,6 +244,7 @@ host.answerState(() => ({
   pointing: hexa.pointing ? { id: hexa.pointing.rect.id ?? null, label: hexa.pointing.label } : null,
   hitRects: [...hexa.hitRects(), ...panel.rects()],
   menu: menu.open,
+  menuLabels: menu.open ? menu.levels[0].items.map((i) => (i.type === 'separator' || i.enabled === false ? null : i.label)) : [],
   hud: hud.rects(),
   forks: hexa.forks.length,
   buttons: panel.buttonRects(),
