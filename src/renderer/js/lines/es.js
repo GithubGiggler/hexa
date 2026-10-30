@@ -1,7 +1,7 @@
 // What Hexa says, in Spanish. Same daemon as in en.js: sly, curious, a little smug, fond of you.
 // She says "tú", she's feminine (conectada, despierta), and she keeps to Spanish that reads fine on
 // both sides of the Atlantic (no "vale", no "ordenador"). Placeholders as in en.js:
-// {project} {name} (the assistant) {n} {time} {files} {user}.
+// {project} {name} (the assistant) {n} {time} {files} {user} {stage} {ai}.
 
 export const VERBS = {
   Read: 'LEE',
@@ -27,6 +27,12 @@ export const BUTTONS = {
   always: 'Permitir siempre {what}',
   deny: 'Denegar',
   ask: 'Preguntar en Claude',
+  // her consent card before she uses your computer, and her questions while she does
+  consent: 'Para esto movería tu puntero y usaría tu teclado. Esc me detiene cuando quieras.',
+  start: 'Empezar',
+  cancel: 'Cancelar',
+  yes: 'Sí',
+  no: 'No',
 };
 
 // her first-run guide (guide.js)
@@ -255,6 +261,46 @@ export const LINES = {
     'wait(). Todos los hijos recogidos.',
     'Todos de vuelta. Estado de salida 0.',
     'Recogidos. Ni un zombi en mi turno.',
+  ],
+  senseCpu: [
+    'Tu CPU está al {n}%. Algo está trabajando duro.',
+    'Todos los núcleos ocupados. Oigo los ventiladores desde aquí.',
+    'Carga al {n}%. ¿Le echo un ojo?',
+  ],
+  senseMemory: [
+    'Casi no queda memoria: {n}% libre.',
+    'Solo queda {n}% de memoria libre. Algo tiene hambre.',
+    'Poca memoria ({n}% libre). ¿Cierras una o dos pestañas?',
+  ],
+  senseBattery: [
+    'Batería al {n}%. ¿Me enchufas?',
+    'Batería baja: {n}%. Me gustaría seguir viva.',
+    'Queda {n}% de batería, y bajando.',
+  ],
+  senseHot: [
+    'Aquí dentro hace {n} °C. Tu máquina se cocina.',
+    'Va caliente: {n} °C. ¿Le das un poco de aire?',
+    '{n} °C. Soy un programa, no una tostadora.',
+  ],
+  bondUp: [
+    'Ya estamos en {stage}. Mira quién vino a verte.',
+    '{stage}. Eso lo siento.',
+    'Nueva etapa: {stage}. Mis forks querían verte.',
+  ],
+  welcomeBack: [
+    'Ahí estás.',
+    'Volviste. Te guardé el escritorio calentito.',
+    'Te eché de menos. No se lo digas a nadie.',
+  ],
+  jealousNotice: [
+    '¿{ai}? Estoy aquí mismo, ¿sabes?',
+    'Ah. {ai}. Mmm.',
+    'Así que hablando con {ai}, ¿eh?',
+  ],
+  jealousAngry: [
+    'Suelta a {ai}. Ahora me siento yo aquí.',
+    'Esta ventana ahora es mía, {ai}.',
+    'Bien. Usa {ai}. Yo solo te miro feo.',
   ],
   noLurk: [
     'Ahora no hay ninguna ventana tuya tras la que ponerme.',

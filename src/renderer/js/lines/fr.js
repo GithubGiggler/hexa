@@ -1,10 +1,10 @@
 // What Hexa says, in French. Same daemon as in en.js: sly, curious, a little smug, fond of you.
 // She says "tu", and she's feminine (branchée, désolée). Placeholders as in en.js:
-// {project} {name} (the assistant) {n} {time} {files} {user}.
-// Written with plain spaces before : ; ! ?, made non-breaking below so the panel never wraps a
-// lone "!" onto its own line.
+// {project} {name} (the assistant) {n} {time} {files} {user} {stage} {ai}.
+// Written with plain spaces before : ; ! ? % and °C, made non-breaking below so the panel never
+// wraps a lone "!" (or "%") onto its own line.
 
-const nb = (s) => s.replace(/ ([:;!?])/g, ' $1');
+const nb = (s) => s.replace(/ ([:;!?%]|°C)/g, '\u00a0$1');
 const each = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k,
   typeof v === 'string' ? nb(v) : Array.isArray(v) ? v.map(nb) : each(v)]));
 
@@ -32,6 +32,12 @@ export const BUTTONS = each({
   always: 'Toujours autoriser {what}',
   deny: 'Refuser',
   ask: 'Demander dans Claude',
+  // her consent card before she uses your computer, and her questions while she does
+  consent: 'Pour ça, j’utiliserais ta souris et ton clavier. Échap m’arrête à tout moment.',
+  start: 'Démarrer',
+  cancel: 'Annuler',
+  yes: 'Oui',
+  no: 'Non',
 });
 
 // her first-run guide (guide.js)
@@ -260,6 +266,46 @@ export const LINES = each({
     'wait(). Tous les enfants récupérés.',
     'Tous rentrés. Code de sortie 0.',
     'Récupérés. Pas de zombies sous ma garde.',
+  ],
+  senseCpu: [
+    'Ton processeur plafonne à {n} %. Ça bosse dur.',
+    'Tous les cœurs sont pris. J’entends les ventilos d’ici.',
+    'Charge à {n} %. Je garde un œil dessus ?',
+  ],
+  senseMemory: [
+    'Presque plus de mémoire : {n} % libre.',
+    'Plus que {n} % de mémoire libre. Quelque chose a faim.',
+    'Mémoire faible ({n} % libre). Tu fermes un onglet ou deux ?',
+  ],
+  senseBattery: [
+    'Batterie à {n} %. Tu me branches ?',
+    'Batterie faible : {n} %. J’aimerais rester en vie.',
+    'Plus que {n} % de batterie, et ça baisse.',
+  ],
+  senseHot: [
+    'Il fait {n} °C ici. Ta machine cuit.',
+    'Ça chauffe : {n} °C. Un peu d’air ?',
+    '{n} °C. Je suis un programme, pas un grille-pain.',
+  ],
+  bondUp: [
+    'On en est à {stage}. Regarde qui vient voir.',
+    '{stage}. Ça me touche.',
+    'Nouvelle étape : {stage}. Mes forks voulaient te voir.',
+  ],
+  welcomeBack: [
+    'Te voilà.',
+    'Bon retour. J’ai gardé ton bureau au chaud.',
+    'Tu m’as manqué. Ne le dis à personne.',
+  ],
+  jealousNotice: [
+    '{ai} ? Je suis juste là, tu sais.',
+    'Oh. {ai}. Hm.',
+    'On parle à {ai}, alors.',
+  ],
+  jealousAngry: [
+    'Lâche {ai}. Maintenant, c’est moi qui suis là.',
+    'Cette fenêtre est à moi maintenant, {ai}.',
+    'Bon. Prends {ai}. Je te regarde de travers.',
   ],
   noLurk: [
     'Aucune fenêtre à toi derrière laquelle me poster.',

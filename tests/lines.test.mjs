@@ -134,9 +134,11 @@ for (const [lang, table] of Object.entries(TABLES)) {
   });
 }
 
-test('French punctuation never wraps onto a line of its own', () => {
-  for (const text of [...Object.values(fr.LINES).flat(), fr.GUIDE.menuLine, fr.GUIDE.restart]) {
-    assert.ok(!/ [:;!?]/.test(text), text);
+test('French punctuation, percents and degrees never wrap onto a line of their own', () => {
+  for (const text of [...Object.values(fr.LINES).flat(), ...Object.values(fr.BUTTONS), fr.GUIDE.menuLine, fr.GUIDE.restart]) {
+    assert.ok(!/ ([:;!?%]|\u00b0C)/.test(text), text);
   }
   assert.ok(fr.LINES.done[0].includes('0\u00a0!'));
+  assert.ok(fr.LINES.senseBattery[0].includes('{n}\u00a0%'));
+  assert.ok(fr.LINES.senseHot[0].includes('{n}\u00a0\u00b0C'));
 });

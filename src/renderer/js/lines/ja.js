@@ -1,7 +1,7 @@
 // What Hexa says, in Japanese. Same daemon as in en.js: sly, curious, a little smug, fond of you.
 // Casual-polite (です/ます with light endings), she calls herself わたし, full-width punctuation.
 // The ticker verbs are two-kanji labels, the way a Japanese UI would show them.
-// Placeholders as in en.js: {project} {name} (the assistant) {n} {time} {files} {user}.
+// Placeholders as in en.js: {project} {name} (the assistant) {n} {time} {files} {user} {stage} {ai}.
 
 export const VERBS = {
   Read: '読込',
@@ -27,6 +27,12 @@ export const BUTTONS = {
   always: '常に許可：{what}',
   deny: '拒否',
   ask: 'Claudeで聞く',
+  // her consent card before she uses your computer, and her questions while she does
+  consent: 'これにはマウスとキーボードを使います。Escでいつでも止められます。',
+  start: '開始',
+  cancel: 'キャンセル',
+  yes: 'はい',
+  no: 'いいえ',
 };
 
 // her first-run guide (guide.js)
@@ -255,6 +261,46 @@ export const LINES = {
     'wait()。子プロセスは全員回収。',
     'みんな戻りました。終了ステータス0。',
     '回収完了。ゾンビは出させません。',
+  ],
+  senseCpu: [
+    'CPUが{n}%に張りついてます。何かががんばってます。',
+    'コアが全部ふさがってます。ファンの音がここまで聞こえます。',
+    '負荷{n}%。見張っておきましょうか？',
+  ],
+  senseMemory: [
+    'メモリがほとんどありません：残り{n}%。',
+    '空きメモリは{n}%だけ。何かが食べすぎです。',
+    'メモリ不足（空き{n}%）。タブをいくつか閉じます？',
+  ],
+  senseBattery: [
+    'バッテリー{n}%。充電します？',
+    'バッテリー残り{n}%。まだ生きていたいです。',
+    '残り{n}%、まだ減ってます。',
+  ],
+  senseHot: [
+    'ここ、{n}°Cあります。マシンが煮えてます。',
+    '熱いです：{n}°C。少し風を通してあげて？',
+    '{n}°C。わたしはプログラム、トースターじゃありません。',
+  ],
+  bondUp: [
+    'いまは{stage}。ほら、みんな見に来ましたよ。',
+    '{stage}。じんときます。',
+    '新しい段階：{stage}。わたしのforkたちが会いたいって。',
+  ],
+  welcomeBack: [
+    'あ、いた。',
+    'おかえりなさい。デスクトップ、温めておきました。',
+    '会いたかったです。内緒ですよ。',
+  ],
+  jealousNotice: [
+    '{ai}？わたし、ここにいますけど。',
+    'へえ。{ai}ですか。ふーん。',
+    '{ai}とおしゃべり中、ですか。',
+  ],
+  jealousAngry: [
+    '{ai}から離れて。ここはわたしの席です。',
+    'このウィンドウはもうわたしのものです、{ai}。',
+    'どうぞ、{ai}を使えば。わたしはにらんでますから。',
   ],
   noLurk: [
     '今は、後ろに立てるウィンドウがありません。',
