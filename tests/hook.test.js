@@ -54,6 +54,14 @@ test('keeps only the fields Hexa uses, plus transcript_path, ppid and the assist
   assert.ok(KEEP.includes('transcript_path'));
 });
 
+test('transcript paths arrive whole, however long, for reading token counts', () => {
+  const long = '/home/u/.claude/projects/' + '-very-long-project-folder'.repeat(15) + '/s/subagents/agent-1.jsonl';
+  const out = slim({ hook_event_name: 'SubagentStop', transcript_path: long, agent_transcript_path: long });
+  assert.equal(out.transcript_path, long);
+  assert.equal(out.agent_transcript_path, long);
+  assert.ok(long.length > 280);
+});
+
 test('long strings are cut at 280 with an ellipsis', () => {
   const s = trim('a'.repeat(500));
   assert.equal(s, 'a'.repeat(280) + '…');

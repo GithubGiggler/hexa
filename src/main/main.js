@@ -29,6 +29,10 @@ const { playDemo } = require('./demo');
 const { startX11Windows } = require('./platform/linux/windows-x11');
 const { startKwinWindows } = require('./platform/linux/kwin');
 const { parentChain, windowForChain } = require('./platform/linux/proc');
+// usage and history (spec §7.3)
+const { createHistory } = require('./usage/history');
+const { createStatsWindow } = require('./usage/stats-window');
+const { statsCli } = require('./usage/report');
 
 const DEV = process.argv.includes('--dev');
 const appDir = app.getAppPath();
@@ -98,6 +102,17 @@ function start() {
   const pendingState = new Map();
   let stateSeq = 0;
 
+  // ---- usage and history (spec §7.3) ----
+  // Every bridge event is counted into her daily records (onEvent below); "Usage and stats" in
+  // her menu opens the stats window over them, and /cli/stats answers `hexa stats`. The window's
+  // IPC handlers (stats:get, stats:export) are registered by createStatsWindow and answer only it.
+  const history = createHistory({ dir: path.join(paths.dataDir(), 'history') });
+  const statsWindow = createStatsWindow({
+    history,
+    preload: path.join(__dirname, '..', 'stats-preload.js'),
+    icon: path.join(appDir, 'assets', 'icons', 'hexa-128.png'),
+  });
+
   const t = () => trayLabels('en');
   const send = (channel, payload) => {
     if (overlay && !overlay.win.isDestroyed()) overlay.win.webContents.send(channel, payload);
@@ -156,6 +171,7 @@ function start() {
     talk: () => send('hexa:command', { name: 'mainframe' }),
     fork: () => send('hexa:command', { name: 'fork' }),
     guide: () => send('hexa:command', { name: 'guide' }),
+    stats: () => statsWindow.open(), // usage and history
     demo: () => {
       stopDemo?.();
       stopDemo = playDemo((evt) => send('hexa:event', evt));
@@ -242,8 +258,9 @@ function start() {
     return { ok: false, error: `no debug route "${name}"` };
   }
 
-  async function onCli(cmd) {
+  async function onCli(cmd, body) {
     if (cmd === 'status') return { body: { ok: true, visible: config.load().visible } };
+    if (cmd === 'stats') return statsCli(history, body); // usage: ?range=today|week|month, read-only
     return { status: 404, body: { ok: false, error: `unknown command "${cmd}"` } };
   }
 
@@ -425,6 +442,7 @@ function start() {
       bridge = await createBridge({
         socketPath: paths.socketPath(),
         onEvent: (evt) => {
+          history.record(evt); // usage and history: counts only, never throws
           // Claude needs you: she comes to the screen you're on first
           if (evt.hook_event_name === 'Notification' && ['permission_prompt', 'elicitation_dialog', 'elicitation_url_dialog', 'agent_needs_input'].includes(evt.notification_type)) {
             moveTo(pointerDisplay().id);
@@ -481,6 +499,7 @@ function start() {
   app.on('before-quit', () => console.log(`[hexa] quitting (${quitReason})`));
 
   app.on('will-quit', () => {
+    history.flush(); // usage and history: the last few seconds of counts
     globalShortcut.unregisterAll();
     bridge?.close();
     windows?.stop();

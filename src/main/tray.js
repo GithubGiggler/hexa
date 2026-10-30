@@ -26,6 +26,7 @@ function buildMenu(state, t, act) {
     { label: t.fork, enabled: Boolean(state.visible), click: () => act.fork() },
     { label: t.demo, click: () => act.demo() },
     { label: t.help, click: () => act.guide() },
+    { label: t.stats, click: () => act.stats() },
     sep,
     {
       label: t.size,

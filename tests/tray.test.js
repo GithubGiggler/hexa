@@ -100,3 +100,15 @@ test('toModel: her menu as plain data, and run(id) does what the item does', () 
   assert.equal(run('nope'), false);
   assert.deepEqual(did, ['teleport', 'small']);
 });
+
+test('Usage and stats opens the stats window, whether she is out or in the background', () => {
+  const hit = [];
+  const act = new Proxy({}, { get: (_, k) => () => hit.push(k) });
+  for (const visible of [true, false]) {
+    const item = find(buildMenu({ ...base, visible }, t, act), t.stats);
+    assert.equal(item.label, 'Usage and stats');
+    assert.notEqual(item.enabled, false);
+    item.click();
+  }
+  assert.deepEqual(hit, ['stats', 'stats']);
+});
