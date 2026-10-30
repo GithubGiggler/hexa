@@ -1,6 +1,6 @@
 // What Hexa says, in German. Same daemon as in en.js: sly, curious, a little smug, fond of you.
 // She says "du", and keys are named as on a German keyboard (Strg, Umschalt).
-// Placeholders as in en.js: {project} {name} (the assistant) {n} {time} {files} {user}.
+// Placeholders as in en.js: {project} {name} (the assistant) {n} {time} {files} {user} {stage} {ai}.
 
 export const VERBS = {
   Read: 'LIEST',
@@ -26,6 +26,12 @@ export const BUTTONS = {
   always: 'Immer erlauben: {what}',
   deny: 'Ablehnen',
   ask: 'In Claude fragen',
+  // her consent card before she uses your computer, and her questions while she does
+  consent: 'Dafür würde ich deine Maus und Tastatur benutzen. Esc stoppt mich jederzeit.',
+  start: 'Los',
+  cancel: 'Abbrechen',
+  yes: 'Ja',
+  no: 'Nein',
 };
 
 // her first-run guide (guide.js)
@@ -254,6 +260,46 @@ export const LINES = {
     'wait(). Alle Kinder eingesammelt.',
     'Alle wieder drin. Exit-Status 0.',
     'Eingesammelt. Bei mir gibt’s keine Zombies.',
+  ],
+  senseCpu: [
+    'Deine CPU hängt bei {n}%. Da schuftet was.',
+    'Alle Kerne beschäftigt. Ich höre die Lüfter bis hier.',
+    'Last bei {n}%. Soll ich ein Auge drauf haben?',
+  ],
+  senseMemory: [
+    'Der Speicher ist fast weg: noch {n}% frei.',
+    'Nur noch {n}% Speicher frei. Da hat jemand Hunger.',
+    'Wenig Speicher ({n}% frei). Ein, zwei Tabs zumachen?',
+  ],
+  senseBattery: [
+    'Akku bei {n}%. Kabel, bitte?',
+    'Akku schwach: {n}%. Ich würde gern weiterleben.',
+    'Noch {n}% Akku, Tendenz fallend.',
+  ],
+  senseHot: [
+    'Hier drin sind es {n} °C. Dein Rechner kocht.',
+    'Läuft heiß: {n} °C. Etwas Luft vielleicht?',
+    '{n} °C. Ich bin ein Konstrukt, kein Toaster.',
+  ],
+  bondUp: [
+    'Jetzt sind wir bei {stage}. Schau, wer alles gucken kommt.',
+    '{stage}. Das spür ich.',
+    'Neue Stufe: {stage}. Meine Forks wollten dich sehen.',
+  ],
+  welcomeBack: [
+    'Da bist du ja.',
+    'Wieder da? Ich hab den Desktop warm gehalten.',
+    'Hab dich vermisst. Nicht weitersagen.',
+  ],
+  jealousNotice: [
+    '{ai}? Ich bin auch noch da, weißt du.',
+    'Oh. {ai}. Hm.',
+    'Wir reden also mit {ai}, ja?',
+  ],
+  jealousAngry: [
+    'Runter von {ai}. Hier sitze jetzt ich.',
+    'Das Fenster gehört jetzt mir, {ai}.',
+    'Na gut. Nimm {ai}. Ich guck nur böse.',
   ],
   noLurk: [
     'Gerade kein Fenster von dir, hinter dem ich stehen kann.',

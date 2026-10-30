@@ -25,6 +25,7 @@ doesn't speak the language you set, she uses English. The code is in `src/main/l
 | `src/renderer/js/lines/xx.js` | Her lines, for a new language `xx`. Copy `en.js` and translate it. |
 | `src/renderer/js/lines/index.js` | Import the new table and add it to `TABLES`. |
 | `src/main/labels.js` | Her menu (the tray, and the one you get by right-clicking her). Add `TRAY.xx`. |
+| `src/main/brain/persona.js` | The language her chat answers in. Add `xx` to `LANGUAGE`, with its English name. |
 
 A language counts once it's in both `TABLES` and `TRAY`, and the tests check that the two lists
 match. Anything missing from a table falls back to English, but the tests expect every table to
@@ -36,7 +37,8 @@ Each line table exports four things:
   and she picks one line from it at random.
 - `VERBS`: the ticker over her head, like `EDITS gigs.ts` or `RUNS npm test`, one per tool.
 - `GUIDE`: her first-run guide and the "How does it work?" tour.
-- `BUTTONS`: the buttons on her permission card.
+- `BUTTONS`: the buttons on her permission card, and her consent card (with its line) before she
+  uses your computer.
 
 ## The rules
 
@@ -46,9 +48,12 @@ The tests (`tests/lines.test.mjs`, `tests/tray.test.js`) check most of these. Ru
   (`GUIDE.topics` too), `BUTTONS` and `TRAY`.
 - **At least three lines per list.** `online` and `linked` can have just one.
 - **Keep placeholders exactly as they are.** You can use `{name}` (the assistant: Claude, Codex…),
-  `{project}`, `{n}`, `{time}`, `{files}` and `{user}`. Move them wherever your grammar needs them,
-  but don't translate or invent any. A guide string, button or menu label has to keep the same
-  placeholders as its English version (`{error}`, `{what}`, `{n}`).
+  `{project}`, `{n}` (a count, a percent or °C), `{time}`, `{files}`, `{user}`, `{stage}` and
+  `{ai}` (another AI's name, like ChatGPT). Move them wherever your grammar needs them, but don't
+  translate or invent any. A guide string, button or menu label has to keep the same placeholders
+  as its English version (`{error}`, `{what}`, `{n}`).
+- **Her bond stages stay in English.** `{stage}` is Unknown host, Handshake, Connected, Trusted or
+  root: her own names for how close you are, not words to translate.
 - **Short lines.** They type out one character at a time in a small panel. No line can be wider
   than 1.5 times the longest English line for the same moment. CJK and full-width characters count
   as two columns.
@@ -78,12 +83,11 @@ What the current tables do:
 - **Steer clear of words only one region uses.** Spanish has no `vale` and no `ordenador`.
 - **Avoid `{user}` for now.** She doesn't know your name yet, and its fallback is the English
   "there".
-- **French typography:** write a plain space before `: ; ! ?`. `fr.js` turns those spaces into
-  non-breaking ones, so a lone `!` never wraps onto a line of its own.
+- **French typography:** write a plain space before `: ; ! ?`, `%` and `°C`. `fr.js` turns those
+  spaces into non-breaking ones, so a lone `!` or `%` never wraps onto a line of its own.
 
 ## Not translated yet
 
-Some text lives outside these tables and is still English in every language: her consent card
-before she uses your computer, the "N actions" status she gives when you click her, the
-`WAITING for you` ticker, the stats window, desktop notifications, and her chat replies (those
-come from the model). If you move one of them into the tables, add the key to every language.
+Some text lives outside these tables and is still English in every language: the "N actions"
+status she gives when you click her, the `WAITING for you` ticker, the stats window and desktop
+notifications. If you move one of them into the tables, add the key to every language.
