@@ -315,6 +315,55 @@ test('a teleport whose animation gets cut off still arrives', () => {
 
 const konsole = (extra = {}) => ({ id: 5, x: 400, y: 600, w: 900, h: 500, max: false, ...extra });
 
+test('she lurks behind the window in front: head and shoulders over its top edge, nothing below it', () => {
+  const { h, player, advance } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  assert.equal(h.lurk(), true);
+  advance(TELEPORT_S);
+  assert.deepEqual({ id: h.perch?.id, behind: h.perch?.behind }, { id: 5, behind: true });
+  assert.equal(h.mode, 'idle');
+  assert.equal(player.stanceName, 'lurk');
+  assert.ok(h.pos.y > 600, 'her feet are hidden behind the window');
+  assert.ok(h.pos.y - h.size.h < 600 - 40, 'her head shows over the edge');
+  const rects = h.hitRects();
+  assert.ok(rects.length > 0);
+  for (const [, y, , rh] of rects) assert.ok(y + rh <= 600 + 0.01, 'nothing below the edge takes your clicks');
+});
+
+test('lurking, she rides along with the window and drops when it goes', () => {
+  const { h, advance } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  h.lurk();
+  advance(TELEPORT_S);
+  const x = h.pos.x;
+  h.setWindows({ fg: 5, wins: [konsole({ x: 600, y: 650 })] });
+  assert.equal(h.pos.x, x + 200);
+  assert.ok(h.pos.y > 650);
+  h.setWindows({ fg: 0, wins: [] });
+  assert.equal(h.mode, 'fall');
+  assert.equal(h.perch, null);
+});
+
+test('no lurking behind a maximised window or one with no room above it', () => {
+  for (const win of [konsole({ max: true }), konsole({ y: AREA.y + 10 })]) {
+    const { h } = make();
+    h.setWindows({ fg: 5, wins: [win] });
+    assert.equal(h.lurk(), false, JSON.stringify(win));
+  }
+});
+
+test('Claude starting gets her from behind the window up onto its edge', () => {
+  const { h, player, advance } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  h.lurk();
+  advance(TELEPORT_S);
+  h.goToWork();
+  advance(TELEPORT_S);
+  assert.equal(h.perch?.id, 5);
+  assert.ok(!h.perch.behind);
+  assert.equal(player.stanceName, 'sit');
+});
+
 test('while Claude works she perches on the window in front', () => {
   const { h, player, advance } = make();
   h.setWindows({ fg: 5, wins: [konsole()] });

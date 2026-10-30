@@ -24,6 +24,7 @@ const TRIP_MS = [260, 900];           // her trip as an orb between vanishing an
 const TRIP_MS_PER_PX = 0.45;
 const TELEPORT_WATCHDOG_MS = 2500;    // a teleport takes about 1 s; past this, she's put where she was going
 const SEAT_DY = 66;                   // from her hips down to her root, seated (thighs folded)
+const LURK_SHOW = 0.36;               // of her height, over a window's top edge when she lurks behind it
 const WANDER = [45000, 90000];
 const POSSESS_EVERY = [60000, 180000]; // sitting idle on a window, now and then she takes it over
 
@@ -91,7 +92,7 @@ export class Hexa {
     this.resumeMode = null;
     this.teleportWatchdog = null;
     this.windows = { fg: 0, wins: [] }; // your windows, front first (main process)
-    this.perch = null;                  // { id, dx }: the window she sits on
+    this.perch = null;                  // { id, dx, behind }: the window she sits on (or lurks behind)
     this.pointing = null;               // { rect, aim, side, label, wire } while she points at something
     this.celebrating = null;            // resolves a victory in progress
     this.flight = null;                 // while she's thrown: flightStep state
@@ -147,7 +148,7 @@ export class Hexa {
     this.modeSince = this.now();
     // perched on a window she stays seated while idle or working; anything else gets her up
     if (mode !== 'idle' && mode !== 'work') this.perch = null;
-    const stance = this.perch ? 'sit' : { idle: 'stand', work: 'work', alert: 'alert', sleep: 'sleep', fall: 'fall', drag: 'dragged', peek: 'peek', point: 'stand' }[mode];
+    const stance = this.perch ? (this.perch.behind ? 'lurk' : 'sit') : { idle: 'stand', work: 'work', alert: 'alert', sleep: 'sleep', fall: 'fall', drag: 'dragged', peek: 'peek', point: 'stand' }[mode];
     if (mode !== 'point' && this.pointing) this.releasePointing();
     if (stance) this.player.stance(stance);
     if (mode !== 'peek') this.upside = false;
@@ -244,7 +245,7 @@ export class Hexa {
     this.setMode('work');
     if (BUSY.has(this.mode) || this.mode === 'alert') return;
     const seat = this.pickSeat({ frontOnly: true });
-    if (seat && this.perch?.id !== seat.win.id) this.sitOn(seat);
+    if (seat && (this.perch?.id !== seat.win.id || this.perch.behind)) this.sitOn(seat); // from behind it: up onto its edge
   }
 
   // ---- your windows (rules ported from upstream v0.4.3) ----
@@ -254,18 +255,51 @@ export class Hexa {
     if (!this.perch || this.drag || BUSY.has(this.mode)) return;
     const win = this.windows.wins.find((w) => w.id === this.perch.id);
     const dx = win ? Math.min(Math.max(this.perch.dx, 50), win.w - 60) : 0;
-    if (!win || !this.canSit(win) || this.covered(win, win.x + dx)) {
+    const behind = this.perch.behind;
+    if (!win || !(behind ? this.canLurk(win) : this.canSit(win)) || this.covered(win, win.x + dx)) {
       // the ledge is gone: closed, minimised, maximised or covered
       this.vy = 0;
       this.enterMode('fall');
       return;
     }
-    this.pos = this.seat(win, dx); // ride along with the window
+    this.pos = behind ? this.lurkSpot(win, dx) : this.seat(win, dx); // ride along with the window
   }
 
   // Where her root goes so that her hips rest on the window's top edge.
   seat(win, dx) {
     return { x: win.x + dx, y: win.y + SEAT_DY * this.scale };
+  }
+
+  // Where her root goes so that she stands behind the window, her head and shoulders over its top.
+  lurkSpot(win, dx) {
+    return { x: win.x + dx, y: win.y + this.size.h * (1 - LURK_SHOW) };
+  }
+
+  canLurk(win) {
+    return !win.max && win.w > 260 && win.y - this.size.h * LURK_SHOW > this.area.y + 8
+      && win.y + this.size.h * (1 - LURK_SHOW) <= this.floor;
+  }
+
+  // The top edge of the window she lurks behind (nothing of her below it shows), or null.
+  lurkEdge() {
+    if (!this.perch?.behind) return null;
+    const win = this.windows.wins.find((w) => w.id === this.perch.id);
+    return win ? win.y : null;
+  }
+
+  // Behind the window you're in, peeking over its top edge. False when there's no window she could
+  // do it with.
+  lurk() {
+    if (BUSY.has(this.mode) || this.mode === 'background' || this.alerting) return false;
+    const win = this.windows.wins.find((w) => w.id === this.windows.fg);
+    if (!win || !this.canLurk(win)) return false;
+    const dx = Math.min(Math.max(between(win.w * 0.2, win.w * 0.8, this.rand), 60), win.w - 60);
+    if (this.covered(win, win.x + dx)) return false;
+    this.teleport(this.lurkSpot(win, dx), () => {
+      this.perch = { id: win.id, dx, behind: true };
+      this.enterMode('idle');
+    });
+    return true;
   }
 
   canSit(win) {
@@ -1044,6 +1078,7 @@ export class Hexa {
     if (this.settings.wander && this.mode === 'idle' && now >= this.nextWander && !this.player.playing) {
       this.nextWander = now + between(WANDER[0], WANDER[1], this.rand);
       if (this.rand() < 0.25) this.peek();
+      else if (this.rand() < 0.3 && this.lurk()) { /* behind your window for a while */ }
       else {
         const t = nextDriftTarget(this.area, this.size, this.pos, this.rand);
         if (this.rand() < 1 / 3) this.teleport(t);
@@ -1172,10 +1207,29 @@ export class Hexa {
     if (this.mode === 'background') return [this.coreRect()];
     if (this.mode === 'suspend' && !this.folding) return [this.coreRect()];
     if (this.hidden || this.alpha <= 0.05) return [];
-    return rigHitRects(this.rig, this.xf);
+    const rects = rigHitRects(this.rig, this.xf);
+    const edge = this.lurkEdge();
+    if (edge === null) return rects;
+    // behind a window: only what shows over its edge takes your clicks
+    return rects.map(([x, y, w, h]) => [x, y, w, Math.min(h, edge - y)]).filter((r) => r[3] > 0);
   }
 
   draw(ctx) {
+    const edge = this.lurkEdge();
+    if (edge === null) {
+      this.drawSelf(ctx);
+      return;
+    }
+    // behind a window: nothing of her below its top edge
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-1e5, -1e5, 2e5, 1e5 + edge);
+    ctx.clip();
+    this.drawSelf(ctx);
+    ctx.restore();
+  }
+
+  drawSelf(ctx) {
     const p = this.palette;
     if (this.mode === 'background' || (this.mode === 'suspend' && !this.folding)) {
       const c = this.coreSpot();

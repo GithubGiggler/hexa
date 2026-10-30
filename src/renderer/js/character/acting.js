@@ -79,6 +79,17 @@ export const ACTS = {
     ],
   },
 
+  // behind a window, only her head and shoulders over its top edge: hands up on the edge, watching
+  lurk: {
+    loop: true,
+    keys: [
+      [10, { arms: 0.42, elbows: -0.55, head: 0.06, visor: 'calm' }],
+      [6, { arms: 0.44, elbows: -0.55, head: 0.12, bob: -1 }],
+      [12, { arms: 0.42, elbows: -0.55, head: 0.02, visor: 'smug' }],
+      [4, { arms: 0.42, elbows: -0.52, head: 0.08, bob: 1 }],
+    ],
+  },
+
   // asleep: slow breathing, head drooping, hair settled
   sleep: {
     loop: true,
