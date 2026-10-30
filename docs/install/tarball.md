@@ -5,7 +5,7 @@ unless you add one. x86_64 only.
 
 ## Install
 
-1. Download `Hexa-<version>-x64.tar.gz` from <https://github.com/OWNER/hexa/releases>.
+1. Download `Hexa-<version>-x64.tar.gz` from <https://github.com/GithubGiggler/hexa/releases>.
 2. Unpack it, and give the folder a name without the version, so its path stays the same when you
    update:
 
@@ -57,7 +57,7 @@ Categories=Utility;
 ```
 
 The tarball has no icon files. For her icon, save `assets/icons/hexa-256.png` from the repo
-(<https://github.com/OWNER/hexa>) as `~/.local/share/icons/hicolor/256x256/apps/hexa.png`.
+(<https://github.com/GithubGiggler/hexa>) as `~/.local/share/icons/hicolor/256x256/apps/hexa.png`.
 
 ## Claude Code hooks
 

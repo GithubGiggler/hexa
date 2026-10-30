@@ -1,7 +1,7 @@
 # Installing Hexa
 
 Hexa runs on Linux, x86_64. Packages are on the releases page:
-<https://github.com/OWNER/hexa/releases>
+<https://github.com/GithubGiggler/hexa/releases>
 
 Pick the guide for your system:
 

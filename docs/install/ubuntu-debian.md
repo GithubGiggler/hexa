@@ -5,7 +5,7 @@ Kubuntu, KDE neon). x86_64 only.
 
 ## Install
 
-1. Download `Hexa-<version>-amd64.deb` from <https://github.com/OWNER/hexa/releases>.
+1. Download `Hexa-<version>-amd64.deb` from <https://github.com/GithubGiggler/hexa/releases>.
 2. Install it with apt, which also pulls in what it needs:
 
    ```sh

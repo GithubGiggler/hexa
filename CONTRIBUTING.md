@@ -27,7 +27,7 @@ Don't read capri-desktop's code after v0.4.3. Anything from later versions is re
 You need git and Node.js 22.12 or newer.
 
 ```sh
-git clone https://github.com/OWNER/hexa.git
+git clone https://github.com/GithubGiggler/hexa.git
 cd hexa
 npm ci
 ```

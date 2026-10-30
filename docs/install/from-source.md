@@ -7,7 +7,7 @@ For working on Hexa, or for running her where no package fits.
 You need git, and Node.js 22.12 or newer with npm (Electron 44 asks for that Node version).
 
 ```sh
-git clone https://github.com/OWNER/hexa.git
+git clone https://github.com/GithubGiggler/hexa.git
 cd hexa
 npm ci
 ```

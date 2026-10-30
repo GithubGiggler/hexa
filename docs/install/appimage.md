@@ -4,7 +4,7 @@ One file that runs on most x86_64 distros, with nothing to install.
 
 ## Install
 
-1. Download `Hexa-<version>-x86_64.AppImage` from <https://github.com/OWNER/hexa/releases>.
+1. Download `Hexa-<version>-x86_64.AppImage` from <https://github.com/GithubGiggler/hexa/releases>.
 2. Move it where it will stay, for example `~/Applications`, and make it executable:
 
    ```sh

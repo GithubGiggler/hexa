@@ -9,7 +9,7 @@
   "private": true,
   "license": "MIT",
   "author": "Hexa contributors",
-  "homepage": "https://github.com/OWNER/hexa",
+  "homepage": "https://github.com/GithubGiggler/hexa",
   "desktopName": "hexa.desktop",
   "keywords": [
     "claude-code",
@@ -116,7 +116,7 @@
       "icon": "build/icons",
       "synopsis": "Desktop companion that narrates what Claude Code is doing",
       "description": "Desktop companion that narrates what Claude Code is doing",
-      "maintainer": "Hexa contributors <OWNER@users.noreply.github.com>",
+      "maintainer": "Hexa contributors <GithubGiggler@users.noreply.github.com>",
       "vendor": "Hexa contributors",
       "desktop": {
         "entry": {

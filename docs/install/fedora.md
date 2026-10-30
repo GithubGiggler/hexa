@@ -4,7 +4,7 @@ For Fedora on x86_64. The same `.rpm` also installs on openSUSE ([opensuse.md](o
 
 ## Install
 
-1. Download `Hexa-<version>-x86_64.rpm` from <https://github.com/OWNER/hexa/releases>.
+1. Download `Hexa-<version>-x86_64.rpm` from <https://github.com/GithubGiggler/hexa/releases>.
 2. Install it with dnf, which also pulls in what it needs:
 
    ```sh

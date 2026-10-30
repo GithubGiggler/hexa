@@ -4,7 +4,7 @@ For openSUSE Tumbleweed and Leap on x86_64. It's the same `.rpm` as for Fedora.
 
 ## Install
 
-1. Download `Hexa-<version>-x86_64.rpm` from <https://github.com/OWNER/hexa/releases>.
+1. Download `Hexa-<version>-x86_64.rpm` from <https://github.com/GithubGiggler/hexa/releases>.
 2. Install it with zypper, which also pulls in what it needs. The package isn't signed, so tell
    zypper that's expected:
 

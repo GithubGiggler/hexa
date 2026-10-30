@@ -3,7 +3,7 @@
 `PKGBUILD` builds the `hexa-bin` package for Arch Linux from the `.deb` on the GitHub release.
 It installs Hexa to `/opt/Hexa`, links `/usr/bin/hexa`, and adds the desktop entry and icons.
 
-Replace `OWNER` in `PKGBUILD` with the GitHub account that hosts the repo before you use it.
+Replace `GithubGiggler` in `PKGBUILD` with the GitHub account that hosts the repo before you use it.
 
 ## Build it locally
 

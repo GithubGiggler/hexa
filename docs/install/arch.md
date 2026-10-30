@@ -21,7 +21,7 @@ makepkg -si
 ```
 
 **From the release.** Download `Hexa-<version>-x64.pacman` from
-<https://github.com/OWNER/hexa/releases>, then:
+<https://github.com/GithubGiggler/hexa/releases>, then:
 
 ```sh
 sudo pacman -U ./Hexa-*-x64.pacman

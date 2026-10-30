@@ -83,13 +83,13 @@ an **original character**: she isn't Capri, and doesn't look or sound like her.
 ## Install
 
 Packages for Fedora, openSUSE, Ubuntu and Debian, and Arch, plus an AppImage and a tarball, are on the
-[releases page](https://github.com/OWNER/hexa/releases). Step-by-step guides for each are in
+[releases page](https://github.com/GithubGiggler/hexa/releases). Step-by-step guides for each are in
 **[docs/install](docs/install/README.md)**.
 
 From source:
 
 ```bash
-git clone https://github.com/OWNER/hexa && cd hexa && npm ci && npm start
+git clone https://github.com/GithubGiggler/hexa && cd hexa && npm ci && npm start
 ```
 
 Then **plug her into Claude Code**: her menu → *Install Claude Code hooks* (or

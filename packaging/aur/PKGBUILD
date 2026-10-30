@@ -1,4 +1,4 @@
-# Maintainer: OWNER <OWNER@users.noreply.github.com>
+# Maintainer: GithubGiggler <GithubGiggler@users.noreply.github.com>
 #
 # hexa-bin: Hexa from the release .deb, repackaged for Arch Linux.
 #
@@ -13,7 +13,7 @@ pkgver=0.1.0
 pkgrel=1
 pkgdesc='Desktop companion that narrates what Claude Code is doing'
 arch=('x86_64')
-url='https://github.com/OWNER/hexa'
+url='https://github.com/GithubGiggler/hexa'
 license=('MIT')
 depends=('gtk3' 'nss' 'alsa-lib' 'libnotify' 'libxtst' 'xdg-utils')
 optdepends=('nodejs: runs the Claude Code hook (without it the hook runs on Hexa itself)'
@@ -22,7 +22,7 @@ provides=('hexa')
 conflicts=('hexa')
 options=('!strip' '!debug')
 source=("Hexa-${pkgver}-amd64.deb::${url}/releases/download/v${pkgver}/Hexa-${pkgver}-amd64.deb"
-        "LICENSE-${pkgver}::https://raw.githubusercontent.com/OWNER/hexa/v${pkgver}/LICENSE")
+        "LICENSE-${pkgver}::https://raw.githubusercontent.com/GithubGiggler/hexa/v${pkgver}/LICENSE")
 # Placeholders. Replace them with `updpkgsums` (see the top of this file).
 sha256sums=('0000000000000000000000000000000000000000000000000000000000000000'
             '0000000000000000000000000000000000000000000000000000000000000000')
