@@ -26,6 +26,13 @@ const { playDemo } = require('./demo');
 const { startX11Windows } = require('./platform/linux/windows-x11');
 const { startKwinWindows } = require('./platform/linux/kwin');
 const { parentChain, windowForChain } = require('./platform/linux/proc');
+// the hexa CLI, notifications while she's away, Do Not Disturb and music
+const { createCli, createSessionList } = require('./cli');
+const { createNotices } = require('./notices');
+const { openSessionBus } = require('./platform/linux/session-bus');
+const { createNotifier } = require('./platform/linux/notifications');
+const { startDnd } = require('./platform/linux/dnd');
+const { startMpris } = require('./platform/linux/mpris');
 
 const DEV = process.argv.includes('--dev');
 const appDir = app.getAppPath();
@@ -236,9 +243,61 @@ function start() {
     return { ok: false, error: `no debug route "${name}"` };
   }
 
-  async function onCli(cmd) {
-    if (cmd === 'status') return { body: { ok: true, visible: config.load().visible } };
-    return { status: 404, body: { ok: false, error: `unknown command "${cmd}"` } };
+  // ---- the hexa CLI, notifications while she's away, Do Not Disturb and music ----
+  // One session bus for all three. Without one: no Do Not Disturb or music, and notify-send.
+  const sessionBus = openSessionBus();
+  const notifier = createNotifier({ bus: sessionBus, icon: path.join(appDir, 'assets', 'icons', 'hexa-128.png') });
+  let dnd = null;   // startDnd's watcher, once the bus has answered
+  let mpris = null; // startMpris's
+  const linuxState = () => ({ dnd: dnd?.get() ?? false, music: mpris?.get() ?? null });
+  const cliSessions = createSessionList(); // what `hexa status` and `hexa sessions` report
+  const cli = createCli({
+    send,
+    config,
+    actions,
+    sessions: cliSessions.list,
+    notify: notifier.notify,
+    linux: linuxState,
+    version: app.getVersion(),
+    hooks: {
+      install: installHooks,
+      uninstall: () => {
+        try {
+          return claudeHooks.uninstall();
+        } finally {
+          trayHandle?.rebuild();
+        }
+      },
+      status: () => claudeHooks.status(),
+    },
+  });
+  // in the background, or with Do Not Disturb on, Claude's news comes as a notification; its only
+  // button, Show, brings her back
+  const notices = createNotices({ notify: notifier.notify, away: () => config.load().visible === false || linuxState().dnd });
+  notifier.onAction((_id, action) => {
+    if (action === 'show') cli.handle('show', {});
+  });
+
+  // Not awaited: a bus that never answers must not hold her up. The renderer hears { dnd, music }
+  // on 'linux:state' whenever either changes, and again whenever her page (re)loads.
+  function startLinuxState() {
+    if (!sessionBus) return;
+    const push = () => send('linux:state', linuxState());
+    overlay.win.webContents.on('did-finish-load', push);
+    startDnd({ bus: sessionBus }).then((d) => {
+      dnd = d;
+      d.onChange(push);
+      push();
+    }, (err) => console.warn('[hexa] Do Not Disturb unavailable:', err.message));
+    startMpris({ bus: sessionBus }).then((m) => {
+      mpris = m;
+      m.onChange(push);
+      push();
+    }, (err) => console.warn('[hexa] MPRIS unavailable:', err.message));
+  }
+
+  function onCli(cmd, body) {
+    return cli.handle(cmd, body);
   }
 
   // Plasma's "animation speed: instant", or GNOME's animations off: she sticks to fades.
@@ -373,6 +432,8 @@ function start() {
             const win = windowForChain(parentChain(evt.ppid), lastWindows.wins);
             if (win) evt.window_id = win.id;
           }
+          cliSessions.see(evt);
+          notices.see(evt).catch(() => {}); // only while she's away
           send('hexa:event', evt);
         },
         onCli,
@@ -383,6 +444,7 @@ function start() {
     } catch (err) {
       console.error(`[hexa] bridge: ${err.message}`);
     }
+    startLinuxState(); // Do Not Disturb and music
 
     if (x11 && !(await x11.hasCompositor().catch(() => true))) {
       trayStatus = t().compositor;
@@ -425,6 +487,10 @@ function start() {
     windows?.stop();
     overlay?.destroy();
     x11?.close();
+    dnd?.stop();
+    mpris?.close();
+    notifier.stop();
+    sessionBus?.disconnect();
   });
   // the overlay is the only window; closing it must not quit while the tray lives
   app.on('window-all-closed', (e) => e.preventDefault?.());
