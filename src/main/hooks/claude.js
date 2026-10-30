@@ -8,7 +8,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { hookCommand, placeHook, readJson: readSettings, writeJson: write } = require('./files');
 
 const EVENTS = [
   'SessionStart',
@@ -37,41 +37,8 @@ function settingsPath() {
   return path.join(base, 'settings.json');
 }
 
-function nodeOnPath() {
-  try {
-    return spawnSync('node', ['-v'], { timeout: 3000 }).status === 0;
-  } catch {
-    return false;
-  }
-}
-
-// With node on the machine the hook runs on it. Without, Hexa's own executable runs it as node:
-// the AppImage file itself when that's how she's installed (its mount point changes every run).
-function hookCommand({ script, hasNode = nodeOnPath(), exe = process.env.APPIMAGE || process.execPath }) {
-  return hasNode ? `node "${script}"` : `ELECTRON_RUN_AS_NODE=1 "${exe}" "${script}"`;
-}
-
-// The hook is copied to Hexa's data dir so its path never moves (AppImage mounts, app updates).
-function placeHook(hookSource, dataDir, name = MARK) {
-  const dir = path.join(dataDir, 'hooks');
-  fs.mkdirSync(dir, { recursive: true });
-  const script = path.join(dir, name);
-  fs.copyFileSync(hookSource, script);
-  fs.chmodSync(script, 0o644);
-  return script;
-}
-
-function readSettings(file) {
-  if (!fs.existsSync(file)) return {};
-  const text = fs.readFileSync(file, 'utf8');
-  if (!text.trim()) return {};
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    // Never overwrite a file we could not understand.
-    throw new Error(`${file} is not valid JSON (${err.message}). Fix it first, nothing was changed.`);
-  }
-}
+// The hook files, settings reading and the careful write (backup, symlinks, permissions, atomic
+// swap) are files.js's, shared with the Codex and Antigravity installers.
 
 function isHexaGroup(group, marks = [MARK]) {
   return Array.isArray(group?.hooks) && group.hooks.some((h) => marks.some((m) => String(h.command || '').includes(m)));
@@ -88,26 +55,6 @@ function strip(settings, marks = [MARK]) {
   }
   if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
   return settings;
-}
-
-// Writes through a symlink (dotfiles managers keep settings.json in a repo) to the real file, keeps
-// its permissions (it can hold tokens under "env"), backs it up first, and swaps it in atomically.
-// A new file is readable only by you.
-function write(file, settings) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const exists = fs.existsSync(file);
-  const real = exists ? fs.realpathSync(file) : file;
-  const mode = exists ? fs.statSync(real).mode & 0o777 : 0o600;
-  if (exists) {
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backup = `${file}.hexa-backup-${stamp}`;
-    fs.copyFileSync(real, backup);
-    fs.chmodSync(backup, mode);
-  }
-  const temp = `${real}.${process.pid}.tmp`;
-  fs.writeFileSync(temp, JSON.stringify(settings, null, 2) + '\n', { mode });
-  fs.chmodSync(temp, mode); // the umask may have taken bits off
-  fs.renameSync(temp, real);
 }
 
 function groupsFor(command) {
