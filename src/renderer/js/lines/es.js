@@ -33,6 +33,10 @@ export const BUTTONS = {
   cancel: 'Cancelar',
   yes: 'Sí',
   no: 'No',
+  // her asking before she opens something, or looks at your screen, from a chat
+  openThis: '¿Abro esto?',
+  startApp: '¿Inicio esta app?',
+  lookScreen: '¿Puedo mirar tu pantalla? La imagen va a Claude.',
 };
 
 // her first-run guide (guide.js)

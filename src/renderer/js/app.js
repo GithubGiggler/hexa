@@ -59,8 +59,20 @@ host.onChat((e) => mainframe.onChat(e));
 // click on the card answers (the panel's buttons take only real clicks)
 let askingNow = false; // her question mid-task is up: the one thing of hers you can click then
 host.onBrainAsk((q) => {
-  const consent = q.kind === 'consent';
   const b = lines().buttons;
+  // from a chat: may she open this, start this app, look at your screen?
+  if (q.kind === 'confirm') {
+    panel.say({
+      kind: 'alert', face: 'ask', hold: null, guarded: true,
+      line: q.what === 'look' ? b.lookScreen : q.what === 'app' ? b.startApp : b.openThis,
+      detail: q.detail || '',
+      actions: [{ id: 'yes', label: b.yes, primary: true }, { id: 'no', label: b.no }],
+      onAction: (value) => host.brainAnswer(q.id, value),
+      onDismiss: () => host.brainAnswer(q.id, 'no'),
+    });
+    return;
+  }
+  const consent = q.kind === 'consent';
   if (!consent) askingNow = true;
   panel.say({
     kind: 'alert', face: 'wide', hold: null, guarded: true,

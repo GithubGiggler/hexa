@@ -33,6 +33,10 @@ export const BUTTONS = {
   cancel: 'キャンセル',
   yes: 'はい',
   no: 'いいえ',
+  // her asking before she opens something, or looks at your screen, from a chat
+  openThis: 'これを開く？',
+  startApp: 'このアプリを起動する？',
+  lookScreen: '画面を見てもいい？画像はClaudeに送られます。',
 };
 
 // her first-run guide (guide.js)

@@ -38,6 +38,10 @@ export const BUTTONS = each({
   cancel: 'Annuler',
   yes: 'Oui',
   no: 'Non',
+  // her asking before she opens something, or looks at your screen, from a chat
+  openThis: 'J’ouvre ça\u00a0?',
+  startApp: 'Je lance cette appli\u00a0?',
+  lookScreen: 'Je peux regarder ton écran\u00a0? L’image part chez Claude.',
 });
 
 // her first-run guide (guide.js)

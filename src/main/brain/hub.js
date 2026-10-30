@@ -151,9 +151,8 @@ function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dat
     },
     lookAtScreen: () => capture.capture().catch(() => null),
     useComputer,
-    get working() {
-      return Boolean(computer);
-    },
+    // her card, your click (guarded like the permission card)
+    confirm: async (what, detail) => (await asker.ask('confirm', { what, detail: String(detail).slice(0, 2000) }, { otherwise: 'no' })) === 'yes',
   });
 
   let brainNow = { brain: ollama, model: null, key: 'none' };
@@ -235,6 +234,10 @@ function createHub({ config, secrets, send, shell, capture, x11, grabEscape, dat
     reset: () => chat.reset(),
     answer: (id, value) => asker.answer(id, value),
     useComputer,
+    // she has your mouse and keyboard right now
+    get working() {
+      return Boolean(computer);
+    },
     stopComputer: () => computer?.controller.abort(),
   };
 }

@@ -90,7 +90,7 @@ function execArgv(exec) {
 function launch(app, { run = spawn } = {}) {
   // gtk-launch knows the whole desktop entry spec; else its Exec line, detached
   return new Promise((resolve) => {
-    execFile('gtk-launch', [app.id], { timeout: 5000 }, (err) => {
+    execFile('gtk-launch', ['--', app.id], { timeout: 5000 }, (err) => {
       if (!err) return resolve(true);
       const argv = execArgv(app.exec);
       if (!argv.length) return resolve(false);
@@ -104,20 +104,38 @@ function launch(app, { run = spawn } = {}) {
   });
 }
 
-// inside your home, after ~ and .. are resolved
+// inside your home, after ~, .. and symlinks are resolved
 function homePath(p, home = os.homedir()) {
-  const full = path.resolve(home, p.replace(/^~(?=$|\/)/, home));
-  return full === home || full.startsWith(home + path.sep) ? full : null;
+  let full = path.resolve(home, p.replace(/^~(?=$|\/)/, home));
+  try {
+    full = fs.realpathSync(full);
+  } catch { /* doesn't exist: checked by the caller */ }
+  const realHome = (() => { try { return fs.realpathSync(home); } catch { return home; } })();
+  return full === realHome || full.startsWith(realHome + path.sep) ? full : null;
 }
 
-// ctx: { openExternal, openPath, media, remind, lookAtScreen, useComputer }, from main
+// a file that would run something when opened: a program, a script, a launcher
+function runnable(full) {
+  try {
+    const st = fs.statSync(full);
+    return st.isFile() && ((st.mode & 0o111) !== 0 || /\.(desktop|sh|bash|run|appimage|py|pl|exe|bat)$/i.test(full));
+  } catch {
+    return false;
+  }
+}
+
+// ctx: { openExternal, openPath, media, remind, lookAtScreen, useComputer, confirm }, from main.
+// confirm(what, detail) -> true only when you clicked yes on her card: opening a website, an app,
+// a file, and looking at your screen all wait for it (a model asked for them, not you).
 function createActions(ctx) {
+  const confirm = ctx.confirm || (async () => false);
   const run = {
     async open_url({ url }) {
       const u = str(url);
       let parsed = null;
       try { parsed = u && new URL(u); } catch { /* not a URL */ }
       if (!parsed || !['http:', 'https:'].includes(parsed.protocol)) return { error: 'Only http and https links.' };
+      if (!(await confirm('url', parsed.href))) return { error: 'They said no: not opened.' };
       await ctx.openExternal(parsed.href);
       return { ok: `Opened ${parsed.host}.`, label: `OPENS ${parsed.host}` };
     },
@@ -126,6 +144,7 @@ function createActions(ctx) {
       if (!n) return { error: 'No app name.' };
       const app = (ctx.findApp || findApp)(n);
       if (!app) return { error: `No app called "${n}" in the menu.` };
+      if (!(await confirm('app', `${app.name}\n${app.exec}`))) return { error: 'They said no: not started.' };
       if (!(await (ctx.launch || launch)(app))) return { error: `${app.name} didn't start.` };
       return { ok: `Started ${app.name}.`, label: `LAUNCHES ${app.name}` };
     },
@@ -133,6 +152,8 @@ function createActions(ctx) {
       const full = str(p, 1000) && homePath(p);
       if (!full) return { error: 'Only files and folders in your home.' };
       if (!fs.existsSync(full)) return { error: `${p} doesn't exist.` };
+      if (runnable(full)) return { error: 'That would run a program: I don\'t open those. They can open it themselves.' };
+      if (!(await confirm('path', full))) return { error: 'They said no: not opened.' };
       const err = await ctx.openPath(full);
       return err ? { error: err } : { ok: `Opened ${path.basename(full) || full}.`, label: `OPENS ${path.basename(full)}` };
     },
@@ -151,6 +172,7 @@ function createActions(ctx) {
     },
     async look_at_screen({ question }) {
       if (!str(question, 500)) return { error: 'What should I look for?' };
+      if (!(await confirm('look', ''))) return { error: 'They said no: I didn\'t look.' };
       const shot = await ctx.lookAtScreen();
       return shot ? { image: shot, label: 'LOOKS at your screen' } : { error: 'I can\'t see your screen.' };
     },
@@ -175,4 +197,4 @@ function createActions(ctx) {
   };
 }
 
-module.exports = { createActions, TOOLS, findApp, execArgv, homePath, readDesktop };
+module.exports = { createActions, TOOLS, findApp, execArgv, homePath, readDesktop, runnable };

@@ -135,3 +135,8 @@ test('computer use: no Escape grab, no start (Escape is how you stop her)', asyn
   assert.equal(r.started, false);
   assert.match(r.reason, /Escape/);
 });
+
+test('hub.working says when she has your mouse and keyboard (no permission card then)', async () => {
+  const { hub } = rig({ computerUse: true });
+  assert.equal(hub.working, false);
+});

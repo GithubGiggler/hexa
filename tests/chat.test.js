@@ -28,7 +28,7 @@ function scripted(name, replies) {
 function rig(name, replies, ctx = {}) {
   const s = scripted(name, replies);
   const events = [];
-  const actions = createActions({ openExternal: async (u) => events.push(['opened', u]), openPath: async () => '', remind: () => {}, lookAtScreen: async () => null, useComputer: async () => ({ started: false, reason: 'off' }), ...ctx });
+  const actions = createActions({ openExternal: async (u) => events.push(['opened', u]), openPath: async () => '', remind: () => {}, lookAtScreen: async () => null, useComputer: async () => ({ started: false, reason: 'off' }), confirm: async () => true, ...ctx });
   const chat = createChat({ getBrain: () => ({ brain: s.brain, model: 'm', key: name }), actions, onEvent: (e) => events.push(e), user: 'you' });
   return { chat, events, seen: s.seen };
 }
@@ -123,4 +123,26 @@ test('who she is stays the same for a whole conversation (no prefix edits), and 
   chat.reset();
   await chat.send('three');
   assert.match(systems[2], /Connected/);
+});
+
+test('opening things and looking at your screen wait for your yes on her card; no programs, no way out of home', async () => {
+  const asked = [];
+  const opened = [];
+  let answer = false;
+  const a = createActions({ openExternal: async (u) => opened.push(u), openPath: async (p) => { opened.push(p); return ''; }, lookAtScreen: async () => ({ data: 'x' }), confirm: async (what, detail) => { asked.push([what, detail]); return answer; } });
+  assert.ok((await a.call('open_url', { url: 'https://example.com/?q=secret' })).error);
+  assert.deepEqual(asked[0], ['url', 'https://example.com/?q=secret'], 'the whole URL on her card');
+  assert.deepEqual(opened, []);
+  answer = true;
+  assert.ok((await a.call('open_url', { url: 'https://example.com/' })).ok);
+  assert.ok((await a.call('look_at_screen', { question: 'what is this?' })).image);
+  assert.equal(asked.at(-1)[0], 'look');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hexa-home-'));
+  fs.writeFileSync(path.join(home, 'run.sh'), '#!/bin/sh\n', { mode: 0o755 });
+  fs.writeFileSync(path.join(home, 'evil.desktop'), '[Desktop Entry]\n');
+  fs.symlinkSync('/etc', path.join(home, 'etc'));
+  const { homePath, runnable } = require('../src/main/brain/actions');
+  assert.equal(runnable(path.join(home, 'run.sh')), true);
+  assert.equal(runnable(path.join(home, 'evil.desktop')), true);
+  assert.equal(homePath('etc/passwd', home), null, 'a symlink out of home is still out of home');
 });
