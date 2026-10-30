@@ -336,7 +336,8 @@ export class Brain {
     // Allow only when the whole request reached her (and so is in the box); else Deny or Claude's own dialog
     const actions = [
       ...(card.complete ? [{ id: 'allow', label: b.allow, primary: true }] : []),
-      ...(card.complete && card.canAlways ? [{ id: 'always', label: fmt(b.always, { what: clip(card.always, 40) }) }] : []),
+      // (the button names the rule; where it's saved is in the box)
+      ...(card.complete && card.canAlways ? [{ id: 'always', label: fmt(b.always, { what: clip(card.always.replace(/ \(saved to [^)]*\)$/, ''), 40) }) }] : []),
       { id: 'deny', label: b.deny },
       { id: 'ask', label: b.ask, ...(card.complete ? {} : { primary: true }) },
     ];
