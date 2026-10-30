@@ -326,3 +326,22 @@ test('rangeFor and eachDate', () => {
   assert.deepEqual(eachDate('nope', '2026-03-01'), []);
   assert.equal(eachDate('2000-01-01', '2026-10-29').length, 400);
 });
+
+test('a history that cannot be written keeps counting, says so once, and writes when it can', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hexa-history-'));
+  const dir = path.join(root, 'history');
+  fs.writeFileSync(dir, 'not a folder');
+  const errors = [];
+  const clock = fakeClock(at(9));
+  const h = createHistory({ dir, prices, now: clock.now, timers: clock.timers, log: { warn() {}, error: (m) => errors.push(m) } });
+  h.record(ev('UserPromptSubmit'));
+  h.flush();
+  h.record(ev('UserPromptSubmit'));
+  h.flush();
+  assert.equal(errors.length, 1);
+  assert.equal(h.summary().prompts, 2, 'nothing lost while it could not write');
+  fs.rmSync(dir);
+  h.record(ev('PreToolUse', { tool_name: 'Read' }));
+  h.flush();
+  assert.equal(readDay(dir, '2026-10-29').prompts, 2);
+});

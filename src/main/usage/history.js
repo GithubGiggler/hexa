@@ -120,6 +120,7 @@ function createHistory({
   let timer = null;
 
   const dayFile = (date) => path.join(dir, `${date}.json`);
+  const failing = new Set(); // files whose last write failed: said once, not every two seconds
 
   function writeAtomic(file, data) {
     const temp = `${file}.${process.pid}.tmp`;
@@ -127,10 +128,16 @@ function createHistory({
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       fs.writeFileSync(temp, JSON.stringify(data, null, 2) + '\n');
       fs.renameSync(temp, file);
+      failing.delete(file);
       return true;
     } catch (err) {
-      fs.rmSync(temp, { force: true });
-      log.error(`[hexa] could not save ${file}: ${err.message}`);
+      try {
+        fs.rmSync(temp, { force: true });
+      } catch {
+        // force only forgives a missing file: the folder may not even be one
+      }
+      if (!failing.has(file)) log.error(`[hexa] could not save ${file}: ${err.message}`);
+      failing.add(file);
       return false;
     }
   }
@@ -202,11 +209,20 @@ function createHistory({
     schedule();
   }
 
+  // Never throws: it runs from a timer and at quit, where a throw would be the app's problem.
   function flush() {
     if (timer) {
       timers.clearTimeout(timer);
       timer = null;
     }
+    try {
+      writeDirty();
+    } catch (err) {
+      log.error(`[hexa] history: ${err.message}`);
+    }
+  }
+
+  function writeDirty() {
     for (const date of [...dirty]) {
       const d = days.get(date);
       d.filesChanged = d.files.length;
