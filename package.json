@@ -20,7 +20,9 @@
     "demo": "node scripts/demo.js",
     "hooks:install": "node scripts/hooks.js install",
     "hooks:uninstall": "node scripts/hooks.js uninstall",
-    "icons": "electron tools/make-icons.js"
+    "icons": "electron tools/make-icons.js",
+    "live:m2": "tools/live/hidden-desktop.sh node tools/live/m2.js",
+    "live:menu": "tools/live/hidden-desktop.sh node tools/live/menu.js"
   },
   "engines": {
     "node": ">=20"

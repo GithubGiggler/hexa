@@ -8,7 +8,7 @@ const x11 = require('x11');
 
 const call = (fn) => new Promise((resolve, reject) => fn((err, value) => (err ? reject(err) : resolve(value))));
 
-function createClient(display) {
+function createClient(display, isClosed) {
   return new Promise((resolve) => {
     let done = false;
     const finish = (value) => {
@@ -20,8 +20,9 @@ function createClient(display) {
     try {
       const client = x11.createClient(display ? { display } : {}, (err, d) => finish(err ? null : d));
       client.on('error', (err) => {
-        // after setup, errors from single requests land here; they must not crash the app
-        if (done) console.error('[hexa] x11:', err.message);
+        // after setup, errors from single requests land here; they must not crash the app. Once
+        // she's closed the connection, requests still queued (a last pointer poll) fail: expected.
+        if (done && !isClosed()) console.error('[hexa] x11:', err.message);
         finish(null);
       });
     } catch {
@@ -32,7 +33,8 @@ function createClient(display) {
 
 async function connect() {
   if (!process.env.DISPLAY) return null;
-  const display = await createClient(process.env.DISPLAY);
+  let closed = false;
+  const display = await createClient(process.env.DISPLAY, () => closed);
   if (!display) return null;
   const X = display.client;
   const screen = display.screen[0];
@@ -75,6 +77,7 @@ async function connect() {
     },
 
     close() {
+      closed = true;
       try {
         X.terminate?.();
         X.close?.();
