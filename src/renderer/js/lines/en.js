@@ -232,6 +232,16 @@ export const LINES = {
     'Evening shift. I\'ll keep the lights on.',
     'Long day? I\'ve got the watch.',
   ],
+  fork: [
+    'fork()! Say hi, kids.',
+    'Spawning a few of me.',
+    'fork() times seven. Don\'t touch anything.',
+  ],
+  reaped: [
+    'wait(). All children reaped.',
+    'Everyone back in. Exit status 0.',
+    'Reaped. No zombies on my watch.',
+  ],
   noLurk: [
     'No window of yours I can stand behind right now.',
     'Nothing to hide behind. Open a window?',

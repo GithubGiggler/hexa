@@ -654,3 +654,37 @@ test('arriving on another screen she appears near your pointer', () => {
   assert.ok(Math.abs(h.pos.x - 900) < 300 && h.pos.y <= 1080);
   assert.notEqual(h.mode, 'teleport');
 });
+
+test('fork(): seven copies with PID tags march into a hex lattice, then she reaps them one by one', async () => {
+  const { h, fxCalls, said, advance } = make();
+  let done = false;
+  const p = h.fork().then((r) => { done = r; });
+  advance(0.2);
+  assert.equal(h.forks.length, 7);
+  assert.equal(new Set(h.forks.map((f) => f.pid)).size, 7, 'a PID each');
+  assert.ok(h.forks.every((f) => /^\d{3,5}$/.test(String(f.pid))));
+  advance(2);
+  // all at their spots: a hex lattice round the first one
+  const [c, ...ring] = h.forks;
+  const d = ring.map((f) => Math.hypot(f.x - c.x, f.y - c.y));
+  assert.ok(Math.max(...d) - Math.min(...d) < 1, `ring distances ${d.map(Math.round)}`);
+  const counts = [];
+  for (let t = 0; t < 6 && h.forks.length; t += 0.1) { advance(0.1); counts.push(h.forks.length); }
+  assert.equal(h.forks.length, 0);
+  assert.ok(new Set(counts).size >= 4, 'reaped one by one, not all at once');
+  advance(1);
+  await p;
+  assert.equal(done, true);
+  assert.ok(said.includes('fork') && said.includes('reaped'));
+  assert.ok(fxCalls.some((c) => c[0] === 'sparks'));
+});
+
+test('no forking in the background or mid-teleport', async () => {
+  const { h, advance } = make();
+  h.setBackground(true);
+  advance(1);
+  assert.equal(await h.fork(), false);
+  const b = make();
+  b.h.teleport({ x: 500, y: 900 });
+  assert.equal(await b.h.fork(), false);
+});

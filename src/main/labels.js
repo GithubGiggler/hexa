@@ -11,6 +11,7 @@ const TRAY = {
     show: 'Bring her back',
     teleport: 'Teleport',
     lurk: 'Watch my window',
+    fork: 'Fork',
     demo: 'Play demo',
     help: 'How does it work?',
     size: 'Size',

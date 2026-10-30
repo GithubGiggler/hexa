@@ -104,6 +104,7 @@ host.onCommand(({ name, on }) => {
   if (name === 'background') hexa.setBackground(on ?? hexa.mode !== 'background');
   else if (name === 'teleport') hexa.teleport();
   else if (name === 'lurk') { if (!hexa.lurk()) hexa.onSay('noLurk'); }
+  else if (name === 'fork') hexa.fork();
   else if (name === 'resume') brain.resume();
   else if (name === 'showcase') showcase();
   else if (name === 'guide') guide.menu();
@@ -135,6 +136,7 @@ host.answerState(() => ({
   hitRects: [...hexa.hitRects(), ...panel.rects()],
   menu: menu.open,
   hud: hud.rects(),
+  forks: hexa.forks.length,
 }));
 
 // ---- the mouse, on her ----

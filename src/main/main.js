@@ -133,6 +133,7 @@ function start() {
     },
     teleport: () => send('hexa:command', { name: 'teleport' }),
     lurk: () => send('hexa:command', { name: 'lurk' }),
+    fork: () => send('hexa:command', { name: 'fork' }),
     guide: () => send('hexa:command', { name: 'guide' }),
     demo: () => {
       stopDemo?.();

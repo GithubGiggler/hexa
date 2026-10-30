@@ -25,6 +25,13 @@ const TRIP_MS_PER_PX = 0.45;
 const TELEPORT_WATCHDOG_MS = 2500;    // a teleport takes about 1 s; past this, she's put where she was going
 const SEAT_DY = 66;                   // from her hips down to her root, seated (thighs folded)
 const LURK_SHOW = 0.36;               // of her height, over a window's top edge when she lurks behind it
+const FORK_N = 7;                     // her Fork: copies of her, one in the middle and six round it
+const FORK_SCALE = 0.42;              // their size, of hers
+const FORK_MARCH_MS = 1400;           // out to their spots (each a little after the one before)
+const FORK_STAGGER_MS = 80;
+const FORK_CHEER_MS = 1600;
+const FORK_REAP_EVERY_MS = 420;       // wait(): one back into her this often
+const FORK_REAP_MS = 300;
 const WANDER = [45000, 90000];
 const POSSESS_EVERY = [60000, 180000]; // sitting idle on a window, now and then she takes it over
 
@@ -92,6 +99,7 @@ export class Hexa {
     this.resumeMode = null;
     this.teleportWatchdog = null;
     this.windows = { fg: 0, wins: [] }; // your windows, front first (main process)
+    this.forks = [];                    // her Fork's copies while it runs: { pid, x, y, from, to, t, phase }
     this.perch = null;                  // { id, dx, behind }: the window she sits on (or lurks behind)
     this.pointing = null;               // { rect, aim, side, label, wire } while she points at something
     this.celebrating = null;            // resolves a victory in progress
@@ -543,6 +551,91 @@ export class Hexa {
         });
       },
     });
+  }
+
+  // ---- her Fork ----
+
+  // fork() seven small copies of her, a PID tag each; they march out into a hex lattice in front of
+  // her and cheer, then she wait()s and reaps them back into her one by one. Resolves true when
+  // it's over, false when she can't now.
+  fork() {
+    if (this.mode === 'background' || BUSY.has(this.mode) || this.forks.length || this.hidden) return Promise.resolve(false);
+    this.activity();
+    this.say('fork');
+    this.voice.play('fork');
+    this.perform('spin');
+    const s = this.scale;
+    const r = 96 * s;
+    const centre = clampInto(this.area, { x: this.pos.x + this.towardCenter() * 300 * s, y: this.floor - 150 * s }, { w: 3 * r, h: 2 * r });
+    const spots = [{ x: centre.x, y: centre.y }];
+    for (let i = 0; i < FORK_N - 1; i++) {
+      const a = (i * Math.PI) / 3;
+      spots.push({ x: centre.x + Math.cos(a) * r, y: centre.y + Math.sin(a) * r });
+    }
+    const pids = new Set();
+    while (pids.size < FORK_N) pids.add(1000 + Math.floor(between(0, 30000, this.rand)) + pids.size);
+    const from = { x: this.pos.x, y: this.pos.y - this.size.h * 0.2 };
+    this.forks = spots.map((to, i) => ({ pid: [...pids][i], x: from.x, y: from.y, from: { ...from }, to, t: -i * FORK_STAGGER_MS, phase: 'march', bob: i }));
+    return new Promise((resolve) => {
+      this.later(FORK_MARCH_MS + FORK_N * FORK_STAGGER_MS + FORK_CHEER_MS, () => {
+        this.forks.forEach((f, i) => this.later((FORK_N - 1 - i) * FORK_REAP_EVERY_MS, () => {
+          f.phase = 'reap';
+          f.t = 0;
+          f.from = { x: f.x, y: f.y };
+        }));
+      });
+      this.forkDone = () => {
+        this.forkDone = null;
+        this.say('reaped');
+        resolve(true);
+      };
+    });
+  }
+
+  forkUpdate(h) {
+    const body = this.body();
+    for (const f of this.forks) {
+      f.t += h * 1000;
+      if (f.phase === 'march') {
+        const k = Math.min(1, Math.max(0, f.t / FORK_MARCH_MS));
+        const e = 1 - (1 - k) * (1 - k);
+        f.x = f.from.x + (f.to.x - f.from.x) * e;
+        f.y = f.from.y + (f.to.y - f.from.y) * e - Math.sin(Math.PI * k) * 40 * this.scale;
+        if (k >= 1) f.phase = 'cheer';
+      } else if (f.phase === 'reap') {
+        const k = Math.min(1, f.t / FORK_REAP_MS);
+        f.x = f.from.x + (body.x - f.from.x) * k * k;
+        f.y = f.from.y + (body.y - f.from.y) * k * k;
+        if (k >= 1) {
+          f.phase = 'gone';
+          this.fx.sparks(body.x, body.y, 5);
+          this.voice.play('blip');
+        }
+      }
+    }
+    const before = this.forks.length;
+    this.forks = this.forks.filter((f) => f.phase !== 'gone');
+    if (before && !this.forks.length) this.forkDone?.();
+  }
+
+  drawForks(ctx, pose, look) {
+    const s = this.scale;
+    for (const f of this.forks) {
+      const bob = f.phase === 'cheer' ? -Math.abs(Math.sin(this.now() / 140 + f.bob)) * 10 * s : 0;
+      ctx.save();
+      ctx.translate(f.x, f.y + bob);
+      ctx.scale(FORK_SCALE, FORK_SCALE);
+      ctx.translate(-this.pos.x, -this.pos.y);
+      drawCharacter(ctx, this.rig, this.xf, this.chains, pose, { ...look, alpha: 0.85 * this.alpha });
+      ctx.restore();
+      ctx.save();
+      ctx.font = `600 ${Math.round(10 * s)}px "JetBrains Mono", monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = this.palette.cyan;
+      ctx.globalAlpha = 0.9 * this.alpha;
+      ctx.fillText(`PID ${f.pid}`, f.x, f.y + bob - this.size.h * FORK_SCALE - 6 * s);
+      ctx.restore();
+    }
   }
 
   // ---- possessing a window (rules ported from upstream v0.4.3, her own look) ----
@@ -1021,6 +1114,7 @@ export class Hexa {
     }
 
     if (this.mode === 'thrown' && this.flight) this.flightUpdate(h);
+    if (this.forks.length) this.forkUpdate(h);
 
     if (this.mode === 'fall') {
       const hipBefore = this.pos.y - SEAT_DY * this.scale;
@@ -1075,7 +1169,7 @@ export class Hexa {
       this.player.play('suspend', { onEnd: () => { this.folding = false; } });
     }
 
-    if (this.settings.wander && this.mode === 'idle' && now >= this.nextWander && !this.player.playing) {
+    if (this.settings.wander && this.mode === 'idle' && now >= this.nextWander && !this.player.playing && !this.forks.length) {
       this.nextWander = now + between(WANDER[0], WANDER[1], this.rand);
       if (this.rand() < 0.25) this.peek();
       else if (this.rand() < 0.3 && this.lurk()) { /* behind your window for a while */ }
@@ -1086,7 +1180,7 @@ export class Hexa {
       }
     }
 
-    if (this.mode === 'idle' && this.perch && now >= this.nextPossess && !this.player.playing) {
+    if (this.mode === 'idle' && this.perch && now >= this.nextPossess && !this.player.playing && !this.forks.length) {
       this.nextPossess = now + between(POSSESS_EVERY[0], POSSESS_EVERY[1], this.rand);
       if (this.rand() < 0.5) this.possess();
     }
@@ -1268,6 +1362,7 @@ export class Hexa {
     const tint = this.fx.impactKind();
     if (tint || this.fx.glitching()) this.drawLayered(ctx, pose, look, tint);
     else drawCharacter(ctx, this.rig, this.xf, this.chains, pose, look);
+    if (this.forks.length) this.drawForks(ctx, pose, look);
   }
 
   // Through a layer of her own: an impact frame (her silhouette flat white, ink or red) and the

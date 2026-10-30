@@ -406,3 +406,21 @@ test('pointing from the HUD stops by itself a few seconds later', () => {
   clock.set(6500); brain.tick();
   assert.equal(stopped, 1);
 });
+
+test('a long job: the victory, then her Fork', async () => {
+  const { brain, hexa, clock } = rig();
+  let forked = 0;
+  hexa.fork = () => { forked++; return Promise.resolve(true); };
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  for (let i = 0; i < 50; i++) brain.handle(evt('PreToolUse', { tool_name: 'Read', tool_input: { file_path: `/p/${i}.ts` } }));
+  clock.set(60000);
+  await brain.handle(evt('Stop', { last_assistant_message: 'Done.' }));
+  assert.equal(forked, 1);
+  const short = rig();
+  short.hexa.fork = () => { forked++; return Promise.resolve(true); };
+  short.brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  for (let i = 0; i < 5; i++) short.brain.handle(evt('PreToolUse', { tool_name: 'Read', tool_input: { file_path: `/p/${i}.ts` } }));
+  short.clock.set(60000);
+  await short.brain.handle(evt('Stop', { last_assistant_message: 'Done.' }));
+  assert.equal(forked, 1, 'a short job: no Fork');
+});

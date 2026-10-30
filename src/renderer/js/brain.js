@@ -27,6 +27,9 @@ const LINKED_HOLD_MS = 5000;
 // a job this small doesn't get the whole victory, just a word
 const BIG_JOB_ACTIONS = 3;
 const BIG_JOB_MS = 20000;
+// a long job deserves her Fork after the victory
+const FORK_JOB_ACTIONS = 50;
+const FORK_JOB_MS = 8 * 60 * 1000;
 
 // "Exit code 1" says nothing; the line that names the problem usually does.
 export function firstErrorLine(text) {
@@ -329,6 +332,7 @@ export class Brain {
     // the panel comes in once she's back down from her victory pose
     await this.hexa.celebrate(summary);
     this.say('done', this.line('done', s), s, { face: 'laugh', summary, quote, hold: 14000, ...extra });
+    if (s.count >= FORK_JOB_ACTIONS || elapsed > FORK_JOB_MS) this.hexa.fork?.();
   }
 
   onStopFailure(evt, s) {
