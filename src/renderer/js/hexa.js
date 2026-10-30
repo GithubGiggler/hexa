@@ -6,7 +6,7 @@
 
 import { solvePose, hitRects as rigHitRects, apply } from './character/rig.js';
 import { drawCharacter, drawCore, makeChains, anchorFor } from './character/draw.js';
-import { restSpot, clampInto, peekSpots, fallStep, nextDriftTarget } from './motion.js';
+import { restSpot, clampInto, peekSpots, fallStep, nextDriftTarget, flightStep } from './motion.js';
 import { rand as between } from './util.js';
 
 const QUIET_SLEEP = 10 * 60 * 1000;   // nothing for this long: she falls asleep
@@ -22,7 +22,9 @@ const ALERT_OFFSET = 70;              // how far beside your pointer she waits w
 const TELEPORT_FAR = 400;             // further than this, she teleports instead of floating
 const TELEPORT_GAP = 250;             // ms between vanishing and arriving
 const TELEPORT_WATCHDOG_MS = 2500;    // a teleport takes about 1 s; past this, she's put where she was going
+const SEAT_DY = 66;                   // from her hips down to her root, seated (thighs folded)
 const WANDER = [45000, 90000];
+const POSSESS_EVERY = [60000, 180000]; // sitting idle on a window, now and then she takes it over
 
 const BOOT_LOG = [
   '[ OK ] Mounted /dev/visor',
@@ -31,9 +33,14 @@ const BOOT_LOG = [
   '[ OK ] Started hexa.service',
 ];
 
-const BUSY = new Set(['drag', 'fall', 'teleport', 'boot', 'background']);
+const BUSY = new Set(['drag', 'fall', 'teleport', 'boot', 'background', 'thrown']);
 // acts that must play to their end (their onEnd moves her on): nothing is played over them
-const MUST_FINISH = new Set(['exit0', 'land', 'segfault', 'teleportOut', 'teleportIn', 'suspend', 'resume', 'bootWave']);
+const MUST_FINISH = new Set(['exit0', 'land', 'segfault', 'teleportOut', 'teleportIn', 'suspend', 'resume', 'bootWave', 'sprawl']);
+// thrown: released faster than this (px/s) she flies; three throws this close together and she's mad
+const THROW_V = 900;
+const THROW_MAX = 4000;
+const MAD_WINDOW = 20000;
+const MAD_LOCK = 15000;
 
 export class Hexa {
   constructor({ rig, player, fx, voice, area, size, scale = 1, rand = Math.random, now = Date.now, settings = {} }) {
@@ -70,6 +77,7 @@ export class Hexa {
     this.zapRolled = false;
     this.lastZap = -Infinity;
     this.nextWander = now() + between(WANDER[0], WANDER[1], rand);
+    this.nextPossess = now() + between(POSSESS_EVERY[0], POSSESS_EVERY[1], rand);
     this.link = 0;
     this.emblemState = null;
     this.flashUntil = 0;
@@ -81,7 +89,14 @@ export class Hexa {
     this.peekSpot = null;
     this.resumeMode = null;
     this.teleportWatchdog = null;
+    this.windows = { fg: 0, wins: [] }; // your windows, front first (main process)
+    this.perch = null;                  // { id, dx }: the window she sits on
+    this.pointing = null;               // { rect, aim, side, label, wire } while she points at something
     this.celebrating = null;            // resolves a victory in progress
+    this.flight = null;                 // while she's thrown: flightStep state
+    this.throws = [];                   // when you last threw her
+    this.grabLockUntil = 0;             // mad: no picking her up until then
+    this.madPending = false;
     this.onBackground = null;           // (inBackground) => void: tells the main process (config, tray)
     player.stance('stand');
     this.solve(0);
@@ -129,7 +144,10 @@ export class Hexa {
   enterMode(mode) {
     this.mode = mode;
     this.modeSince = this.now();
-    const stance = { idle: 'stand', work: 'work', alert: 'alert', sleep: 'sleep', fall: 'fall', drag: 'dragged', peek: 'peek' }[mode];
+    // perched on a window she stays seated while idle or working; anything else gets her up
+    if (mode !== 'idle' && mode !== 'work') this.perch = null;
+    const stance = this.perch ? 'sit' : { idle: 'stand', work: 'work', alert: 'alert', sleep: 'sleep', fall: 'fall', drag: 'dragged', peek: 'peek', point: 'stand' }[mode];
+    if (mode !== 'point' && this.pointing) this.releasePointing();
     if (stance) this.player.stance(stance);
     if (mode !== 'peek') this.upside = false;
   }
@@ -219,9 +237,81 @@ export class Hexa {
     this.player.play(act, { dir: opts.dir ?? this.dir, onCue: (c) => this.cue(c) });
   }
 
+  // Claude started: to work, perched on the window in front if she can sit on it.
   goToWork() {
     this.activity();
     this.setMode('work');
+    if (BUSY.has(this.mode) || this.mode === 'alert') return;
+    const seat = this.pickSeat({ frontOnly: true });
+    if (seat && this.perch?.id !== seat.win.id) this.sitOn(seat);
+  }
+
+  // ---- your windows (rules ported from upstream v0.4.3) ----
+
+  setWindows(snap) {
+    this.windows = snap || { fg: 0, wins: [] };
+    if (!this.perch || this.drag || BUSY.has(this.mode)) return;
+    const win = this.windows.wins.find((w) => w.id === this.perch.id);
+    const dx = win ? Math.min(Math.max(this.perch.dx, 50), win.w - 60) : 0;
+    if (!win || !this.canSit(win) || this.covered(win, win.x + dx)) {
+      // the ledge is gone: closed, minimised, maximised or covered
+      this.vy = 0;
+      this.enterMode('fall');
+      return;
+    }
+    this.pos = this.seat(win, dx); // ride along with the window
+  }
+
+  // Where her root goes so that her hips rest on the window's top edge.
+  seat(win, dx) {
+    return { x: win.x + dx, y: win.y + SEAT_DY * this.scale };
+  }
+
+  canSit(win) {
+    const roomAbove = this.size.h * 0.75 + 12;
+    return !win.max && win.w > 260 && win.y > this.area.y + roomAbove && win.y < this.floor - 80;
+  }
+
+  // Is her spot on that ledge hidden under a window that's in front of it?
+  covered(win, x) {
+    const half = 34 * this.scale;
+    for (const o of this.windows.wins) {
+      if (o.id === win.id) return false; // reached it: everything after is behind
+      if (o.x < x + half && o.x + o.w > x - half && o.y <= win.y && o.y + o.h >= win.y) return true;
+    }
+    return false;
+  }
+
+  // A window she could sit on, the one in front first: { win, dx } or null.
+  pickSeat({ frontOnly = false, except = null } = {}) {
+    const options = [];
+    for (const win of this.windows.wins) {
+      if (win.id === except || !this.canSit(win)) continue;
+      const dx = Math.min(Math.max(between(win.w * 0.18, win.w * 0.6, this.rand), 60), Math.max(60, win.w - 190));
+      if (this.covered(win, win.x + dx)) continue;
+      options.push({ win, dx });
+    }
+    const front = options.find((o) => o.win.id === this.windows.fg);
+    if (frontOnly) return front || null;
+    return front || options[0] || null;
+  }
+
+  sitOn({ win, dx }) {
+    this.teleport(this.seat(win, dx), () => {
+      this.perch = { id: win.id, dx };
+      this.enterMode(this.mode === 'teleport' ? 'idle' : this.mode);
+    });
+  }
+
+  // A window whose top edge is within tol of hipY under x, that she could sit on.
+  ledgeUnder(x, hipY, tol) {
+    return this.windows.wins.find((w) => Math.abs(w.y - hipY) <= tol && x >= w.x + 40 && x <= w.x + w.w - 40
+      && this.canSit(w) && !this.covered(w, x)) || null;
+  }
+
+  perchOn(win, x) {
+    this.perch = { id: win.id, dx: x - win.x };
+    this.pos = this.seat(win, this.perch.dx);
   }
 
   towardCenter() {
@@ -414,6 +504,160 @@ export class Hexa {
     });
   }
 
+  // ---- possessing a window (rules ported from upstream v0.4.3, her own look) ----
+
+  canPossess() {
+    if (this.settings.possess === false || this.reduced) return false;
+    if (!this.perch || BUSY.has(this.mode) || this.hidden) return false;
+    return this.windows.wins.some((w) => w.id === this.perch.id);
+  }
+
+  // She plugs into the window she sits on and dives in: it lights up, glitches and looks at you with
+  // her eyes (fx.possess), then she comes out of another window, or further along this one.
+  // Resolves true once she's out.
+  possess() {
+    if (!this.canPossess()) return Promise.resolve(false);
+    const id = this.perch.id;
+    const rect = () => this.windows.wins.find((w) => w.id === id) || null;
+    const covers = () => {
+      const front = [];
+      for (const o of this.windows.wins) {
+        if (o.id === id) break;
+        front.push(o);
+      }
+      return front;
+    };
+    const entry = this.pos.x - rect().x;
+    this.enterMode('teleport'); // inside the window: busy, not clickable
+    this.resumeMode = 'idle';
+    return new Promise((resolve) => {
+      const comeOut = () => {
+        const here = rect();
+        let seat = this.pickSeat({ except: id });
+        if (!seat && here && this.canSit(here)) {
+          const dx = Math.min(Math.max(here.w - entry + between(-60, 60, this.rand), 60), Math.max(60, here.w - 190));
+          if (!this.covered(here, here.x + dx)) seat = { win: here, dx }; // the other end of it
+        }
+        this.pos = seat ? this.seat(seat.win, seat.dx) : clampInto(this.area, nextDriftTarget(this.area, this.size, this.pos, this.rand), this.size);
+        this.resetChains();
+        this.hidden = false;
+        this.fx.column(this.pos.x, this.pos.y);
+        this.voice.play('teleport-in');
+        this.player.play('teleportIn', {
+          fast: true,
+          onEnd: () => {
+            this.resumeMode = null;
+            if (seat) this.perch = { id: seat.win.id, dx: seat.dx };
+            this.enterMode('idle');
+            resolve(true);
+          },
+        });
+      };
+      this.voice.play('teleport-out');
+      this.player.play('teleportOut', {
+        fast: true,
+        onCue: (c) => {
+          if (c !== 'shatter') return;
+          const b = this.body();
+          this.fx.shards(b.x, b.y, 18, { spread: 160 });
+        },
+        onEnd: () => {
+          this.hidden = true;
+          const taken = this.fx.possess(rect, { covers, look: () => this.pointer, glyphs: this.rig.glyphs });
+          this.voice.play('bolt');
+          this.later(300, () => this.voice.play('possess'));
+          this.later(1900, () => {
+            taken.leave();
+            this.later(260, comeOut);
+          });
+        },
+      });
+    });
+  }
+
+  // ---- pointing at things (rules ported from upstream v0.4.3) ----
+
+  // Can she point at this window so you'd see it: not maximised, not tiny, its top not covered.
+  canPoint(win) {
+    return Boolean(win && !win.max && win.w > 120 && win.y > -10 && !this.covered(win, win.x + win.w / 2));
+  }
+
+  // Where to stand to point at rect: beside it, on the side with more room, a bit below its middle
+  // (on the floor for things low on the screen).
+  spotNear(rect) {
+    const s = this.scale;
+    const half = this.size.w / 2 + 30;
+    const reach = 150 * s + 60; // from her to what she points at: room for the arm to shoot out
+    const { x: ax, w: aw, y: ay, h: ah } = this.area;
+    const roomLeft = rect.x - ax;
+    const roomRight = ax + aw - (rect.x + rect.w);
+    let x;
+    if (Math.max(roomLeft, roomRight) >= half * 2 + 40) x = roomRight >= roomLeft ? rect.x + rect.w + reach : rect.x - reach;
+    else x = rect.x + rect.w / 2 < ax + aw / 2 ? ax + aw - half : ax + half; // nowhere beside it: the far side
+    x = Math.min(Math.max(x, ax + half), ax + aw - half);
+    const cy = Math.min(Math.max(rect.y + rect.h / 2, ay), this.floor);
+    const y = cy > ay + ah * 0.6 ? this.floor : Math.min(Math.max(cy + this.size.h * 0.6, ay + this.size.h + 20), this.floor);
+    return { x, y };
+  }
+
+  // The point on rect she aims at: as close to her shoulder as it gets, a little inside it.
+  aimPoint(rect, shoulder) {
+    const inset = Math.min(24, rect.w / 3, rect.h / 3);
+    return {
+      x: Math.min(Math.max(shoulder.x, rect.x + inset), rect.x + rect.w - inset),
+      y: Math.min(Math.max(shoulder.y, rect.y + inset), rect.y + rect.h - inset),
+    };
+  }
+
+  // Go and point at rect, and keep pointing (a wire from her finger, brackets, a tag) until
+  // stopPointing().
+  pointAt(rect, { label = '' } = {}) {
+    if (this.mode === 'background' || BUSY.has(this.mode)) return Promise.resolve(false);
+    if (this.mode === 'sleep' || this.mode === 'suspend') this.wakeUp();
+    this.stopPointing();
+    const spot = this.spotNear(rect);
+    const begin = () => {
+      const shoulder = this.point('neck', 0, 0);
+      const dirToIt = Math.sign(rect.x + rect.w / 2 - this.pos.x) || 1;
+      const side = dirToIt * this.dir > 0 ? 'R' : 'L';
+      this.pointing = { rect, aim: this.aimPoint(rect, shoulder), side, label, wire: null };
+      this.enterMode('point');
+      this.player.play('point', {
+        dir: dirToIt,
+        onCue: (c) => c === 'lock' && this.lockOn(),
+        onEnd: () => this.lockOn(), // the act was cut short: lock on anyway
+      });
+    };
+    this.target = null;
+    if (Math.hypot(spot.x - this.pos.x, spot.y - this.pos.y) > 140) this.teleport(spot, begin);
+    else begin();
+    return Promise.resolve(true);
+  }
+
+  lockOn() {
+    const p = this.pointing;
+    if (!p || p.wire) return;
+    const hand = p.side === 'R' ? 'handR' : 'handL';
+    p.wire = this.fx.pointer(() => this.point(hand, 0, 12), () => this.windows.wins.find((w) => w.id === p.rect.id) || p.rect, { label: p.label });
+    this.voice.play('bolt');
+  }
+
+  releasePointing() {
+    const p = this.pointing;
+    this.pointing = null;
+    p?.wire?.retract();
+  }
+
+  // Done showing: the wire reels back into her finger and the arm drops.
+  stopPointing() {
+    if (!this.pointing) return;
+    this.releasePointing();
+    if (this.mode === 'point') {
+      this.enterMode('idle');
+      this.player.play('unpoint');
+    }
+  }
+
   peek() {
     const spots = peekSpots(this.area, this.size);
     const others = spots.filter((s) => s.side !== this.peekSpot?.side);
@@ -450,8 +694,10 @@ export class Hexa {
   onDragStart(p) {
     if (this.mode === 'background' || this.mode === 'suspend' || this.mode === 'teleport' || this.mode === 'boot') return false;
     if (!this.contains(p)) return false;
+    if (this.now() < this.grabLockUntil) return false; // still mad at you
     this.activity();
-    this.drag = { dx: this.pos.x - p.x, dy: this.pos.y - p.y, last: { ...p } };
+    this.flight = null; // caught mid-air
+    this.drag = { dx: this.pos.x - p.x, dy: this.pos.y - p.y, last: { ...p }, samples: [{ t: this.now(), x: p.x, y: p.y }] };
     this.target = null;
     this.player.stop();
     this.enterMode('drag');
@@ -463,19 +709,101 @@ export class Hexa {
     if (!this.drag) return;
     this.drag.vx = p.x - this.drag.last.x;
     this.drag.last = { ...p };
+    const now = this.now();
+    this.drag.samples.push({ t: now, x: p.x, y: p.y });
+    this.drag.samples = this.drag.samples.filter((v) => now - v.t <= 100);
     this.pos = clampInto(this.area, { x: p.x + this.drag.dx, y: p.y + this.drag.dy }, this.size);
   }
 
   onDragEnd() {
     if (!this.drag) return;
+    const samples = this.drag.samples;
     this.drag = null;
     this.activity();
+    // let go mid-swing: she flies off with it
+    const first = samples[0];
+    const last = samples[samples.length - 1];
+    const dt = (last.t - first.t) / 1000;
+    if (samples.length > 1 && dt > 0) {
+      let vx = (last.x - first.x) / dt;
+      let vy = (last.y - first.y) / dt;
+      const speed = Math.hypot(vx, vy);
+      if (speed > THROW_V) {
+        const k = Math.min(1, THROW_MAX / speed);
+        vx *= k;
+        vy *= k;
+        this.throwHer(vx, vy);
+        return;
+      }
+    }
+    // let go with her hips on a window's top edge: she sits there
+    const ledge = this.ledgeUnder(this.pos.x, this.pos.y - SEAT_DY * this.scale, 24);
+    if (ledge) {
+      this.perchOn(ledge, this.pos.x);
+      this.settleMode('idle');
+      this.say('dropped');
+      return;
+    }
     if (this.pos.y < this.floor - 2) {
       this.vy = 0;
       this.enterMode('fall');
     } else {
       this.settleMode('idle');
       this.say('dropped');
+    }
+  }
+
+  throwHer(vx, vy) {
+    const now = this.now();
+    this.flight = { x: this.pos.x, y: this.pos.y, vx, vy, spin: vx * 0.004 };
+    this.enterMode('thrown');
+    this.player.stance('fall');
+    this.throws = this.throws.filter((t) => now - t < MAD_WINDOW);
+    this.throws.push(now);
+    if (this.throws.length >= 3) {
+      this.throws = [];
+      this.madPending = true;
+    }
+  }
+
+  // she's down (or caught): mad if you've been throwing her around
+  afterFlight() {
+    this.flight = null;
+    if (!this.madPending) return;
+    this.madPending = false;
+    this.grabLockUntil = this.now() + MAD_LOCK;
+    this.say('mad');
+    this.later(900, () => this.pointer && this.zap(this.pointer));
+  }
+
+  flightUpdate(h) {
+    const ledges = this.windows.wins.filter((w) => this.canSit(w)).map((w) => ({ id: w.id, x: w.x, y: w.y, w: w.w }));
+    const r = flightStep(this.flight, h, { area: this.area, size: this.size, ledges, hipDy: SEAT_DY * this.scale });
+    this.flight = r.state;
+    this.pos = { x: r.state.x, y: r.state.y };
+    for (const e of r.events) {
+      const b = this.body();
+      if (e.type === 'crash') {
+        const x = e.side === 'left' ? this.area.x : this.area.x + this.area.w;
+        this.fx.crack(x, b.y);
+        this.fx.shards(x, b.y, 10, { spread: 140 });
+        this.voice.play('land');
+      } else if (e.type === 'ledge' && e.caught) {
+        const win = this.windows.wins.find((w) => w.id === e.id);
+        if (win) this.perchOn(win, this.pos.x);
+        this.enterMode('idle');
+        this.player.play('land', { onCue: (c) => this.cue(c) });
+        this.say('landed');
+        this.afterFlight();
+      } else if (e.type === 'ledge') {
+        this.fx.shards(this.pos.x, this.pos.y - SEAT_DY * this.scale, 8, { spread: 120 }); // and the window shakes
+      } else if (e.type === 'floor') {
+        this.enterMode('idle');
+        if (e.upright) this.player.play('land', { onCue: (c) => this.cue(c) });
+        else this.player.play('sprawl');
+        this.say('landed');
+        this.afterFlight();
+      }
     }
   }
 
@@ -574,6 +902,26 @@ export class Hexa {
     this.player.play('suspend', { onEnd: () => { this.folding = false; } });
   }
 
+  // Her overlay just moved to another screen (she followed you there): she appears near your
+  // pointer, or in her corner.
+  arrive() {
+    if (this.mode === 'background') return;
+    this.player.stop();
+    this.teleportWatchdog = null;
+    this.tasks = [];
+    this.hidden = false;
+    this.alpha = 1;
+    this.fade = null;
+    const p = this.pointer;
+    const near = p ? { x: p.x + (p.x > this.area.x + this.area.w / 2 ? -160 : 160), y: p.y + this.size.h * 0.6 } : restSpot(this.area, this.size);
+    this.pos = clampInto(this.area, near, this.size);
+    this.resetChains();
+    this.enterMode('idle');
+    this.fx.column(this.pos.x, this.pos.y);
+    this.voice.play('teleport-in');
+    this.player.play('teleportIn', { fast: true, onEnd: () => this.settleMode('idle') });
+  }
+
   // ---- her boot ----
 
   boot() {
@@ -631,10 +979,26 @@ export class Hexa {
       if (k >= 1) this.fade = null;
     }
 
+    if (this.mode === 'thrown' && this.flight) this.flightUpdate(h);
+
     if (this.mode === 'fall') {
+      const hipBefore = this.pos.y - SEAT_DY * this.scale;
       const s = fallStep({ y: this.pos.y, vy: this.vy }, h, this.floor);
-      this.pos.y = s.y;
-      this.vy = s.vy;
+      const hipAfter = s.y - SEAT_DY * this.scale;
+      // a window ledge under her on the way down catches her
+      const ledge = this.windows.wins.find((w) => w.y >= hipBefore && w.y <= hipAfter && this.pos.x >= w.x + 40
+        && this.pos.x <= w.x + w.w - 40 && this.canSit(w) && !this.covered(w, this.pos.x));
+      if (ledge) {
+        this.vy = 0;
+        this.perchOn(ledge, this.pos.x);
+        this.enterMode('idle');
+        this.player.play('land', { onCue: (c) => this.cue(c) });
+        this.say('landed');
+        s.landed = false;
+      } else {
+        this.pos.y = s.y;
+        this.vy = s.vy;
+      }
       if (s.landed) {
         this.enterMode('idle');
         this.player.play('land', { onCue: (c) => this.cue(c), onEnd: () => this.settleMode(this.mode === 'idle' ? 'idle' : this.mode) });
@@ -678,6 +1042,11 @@ export class Hexa {
         if (this.rand() < 1 / 3) this.teleport(t);
         else this.target = t;
       }
+    }
+
+    if (this.mode === 'idle' && this.perch && now >= this.nextPossess && !this.player.playing) {
+      this.nextPossess = now + between(POSSESS_EVERY[0], POSSESS_EVERY[1], this.rand);
+      if (this.rand() < 0.5) this.possess();
     }
 
     if (this.mode === 'work' && this.rand() < h * 0.8) {
@@ -748,6 +1117,19 @@ export class Hexa {
     if (this.pointer && (this.mode === 'idle' || this.mode === 'work') && this.nearSince !== null) {
       const hd = this.xf ? this.head() : this.pos;
       pose.head += Math.max(-0.3, Math.min(0.3, (this.pointer.x - hd.x) / 600));
+    }
+    // pointing: the arm toward her aim point, drawn longer to reach it
+    const p = this.pointing;
+    if (p && this.mode === 'point' && this.xf) {
+      const sh = this.point(p.side === 'R' ? 'upperR' : 'upperL', 0, 0);
+      const rect = this.windows.wins.find((w) => w.id === p.rect.id) || p.rect;
+      p.aim = this.aimPoint(rect, sh);
+      const dx = Math.abs(p.aim.x - sh.x);
+      const dy = p.aim.y - sh.y;
+      pose[`arm${p.side}`] = Math.min(2.9, Math.max(0.3, Math.atan2(dx, dy)));
+      pose[`elbow${p.side}`] = 0;
+      pose[`long${p.side}`] = Math.min(2, Math.max(1, Math.hypot(dx, dy) / ((30 + 28 + 12) * this.scale) * 0.8));
+      if (!pose.visor) pose.visor = 'smug';
     }
     this.pose = pose;
     this.xf = solvePose(this.rig, pose, { x: this.pos.x, y: this.pos.y, scale: this.scale, dir: this.dir });

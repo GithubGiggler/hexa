@@ -15,7 +15,8 @@ function make(settings = {}) {
   const play = player.play.bind(player);
   player.play = (name, opts) => { played.push(name); return play(name, opts); };
   const fxCalls = [];
-  const fx = new Proxy({ impactKind: () => null, glitching: () => 0 }, { get: (o, k) => (k in o ? o[k] : (...a) => fxCalls.push([k, ...a])) });
+  // records every effect asked for; possess hands back its { leave } like the real Fx does
+  const fx = new Proxy({ impactKind: () => null, glitching: () => 0 }, { get: (o, k) => (k in o ? o[k] : (...a) => { fxCalls.push([k, ...a]); return k === 'possess' ? { leave() {} } : undefined; }) });
   const sounds = [];
   const said = [];
   const h = new Hexa({
@@ -280,6 +281,166 @@ test('a teleport whose animation gets cut off still arrives', () => {
   assert.equal(h.alpha, 1);
 });
 
+// ---- windows (M2): sitting and riding, rules ported from upstream v0.4.3 ----
+
+const konsole = (extra = {}) => ({ id: 5, x: 400, y: 600, w: 900, h: 500, max: false, ...extra });
+
+test('while Claude works she perches on the window in front', () => {
+  const { h, player, advance } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  h.goToWork();
+  advance(1.5);
+  assert.equal(h.perch?.id, 5);
+  assert.equal(h.mode, 'work');
+  assert.equal(player.stanceName, 'sit');
+  assert.equal(h.pos.y, 600 + 66);
+  assert.ok(h.pos.x > 400 && h.pos.x < 1300);
+});
+
+test('she rides along when her window moves', () => {
+  const { h, advance } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  h.goToWork();
+  advance(1.5);
+  const dx = h.pos.x - 400;
+  h.setWindows({ fg: 5, wins: [konsole({ x: 500, y: 550 })] });
+  assert.deepEqual(h.pos, { x: 500 + dx, y: 550 + 66 });
+});
+
+test('she falls when her window closes, is maximised or is covered', () => {
+  for (const next of [
+    { fg: 0, wins: [] },
+    { fg: 5, wins: [konsole({ max: true })] },
+    { fg: 9, wins: [{ id: 9, x: 0, y: 300, w: 2560, h: 900, max: false }, konsole()] },
+  ]) {
+    const { h, advance } = make();
+    h.setWindows({ fg: 5, wins: [konsole()] });
+    h.goToWork();
+    advance(1.5);
+    assert.equal(h.perch?.id, 5);
+    h.setWindows(next);
+    assert.equal(h.mode, 'fall', JSON.stringify(next));
+    assert.equal(h.perch, null);
+  }
+});
+
+test('dropped with her hips on a window edge, she sits there', () => {
+  const { h, player } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  const grab = { x: h.pos.x, y: h.pos.y - 120 }; // held 120 px above her root
+  assert.equal(h.onDragStart(grab), true);
+  // carry her so her root is at y 656: her hips (66 px up) end 10 px above the window's top edge
+  h.onDragMove({ x: 800, y: 656 - 120 });
+  h.onDragEnd({ x: 800, y: 656 - 120 });
+  assert.equal(h.perch?.id, 5);
+  assert.equal(h.pos.y, 600 + 66);
+  assert.equal(player.stanceName, 'sit');
+});
+
+test('falling past a window under her, she is caught by its ledge', () => {
+  const { h, advance, said } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  h.pos = { x: 800, y: 300 };
+  h.vy = 0;
+  h.enterMode('fall');
+  advance(2);
+  assert.equal(h.perch?.id, 5);
+  assert.equal(h.pos.y, 600 + 66);
+  assert.ok(said.includes('landed'));
+});
+
+test('pickSeat prefers the window in front and skips covered spots', () => {
+  const { h } = make();
+  const back = { id: 7, x: 100, y: 700, w: 900, h: 500, max: false };
+  h.setWindows({ fg: 5, wins: [konsole(), back] });
+  assert.equal(h.pickSeat().win.id, 5);
+  assert.equal(h.pickSeat({ except: 5 })?.win.id ?? null, null, 'window 7 is covered by window 5 around its top edge, or too low');
+  assert.equal(h.pickSeat({ frontOnly: true }).win.id, 5);
+});
+
+// ---- possession (M2) ----
+
+test('possess: she dives into the window she sits on, takes it over, and comes out perched', async () => {
+  const { h, fxCalls, sounds, advance } = make();
+  const other = { id: 8, x: 1500, y: 500, w: 800, h: 600, max: false };
+  h.setWindows({ fg: 5, wins: [konsole(), other] });
+  h.goToWork();
+  advance(1.5);
+  h.setMode('idle');
+  assert.equal(h.canPossess(), true);
+  const done = h.possess();
+  advance(4);
+  assert.equal(await done, true);
+  assert.ok(fxCalls.some((c) => c[0] === 'possess'));
+  assert.ok(sounds.includes('possess'));
+  assert.ok(h.perch, 'she comes out sitting on a window');
+  assert.equal(h.hidden, false);
+});
+
+test('possess is off when she is not sitting, the setting is off, or motion is reduced', () => {
+  const standing = make();
+  standing.h.setWindows({ fg: 5, wins: [konsole()] });
+  assert.equal(standing.h.canPossess(), false, 'not sitting');
+  for (const settings of [{ possess: false }, { motion: 'reduced' }]) {
+    const { h, advance } = make(settings);
+    h.setWindows({ fg: 5, wins: [konsole()] });
+    h.goToWork();
+    advance(1.5);
+    assert.equal(h.canPossess(), false, JSON.stringify(settings));
+  }
+});
+
+// ---- pointing (M2) ----
+
+const overlaps = (a, b) => a[0] < b.x + b.w && b.x < a[0] + a[2] && a[1] < b.y + b.h && b.y < a[1] + a[3];
+
+test('pointAt: she goes beside the window and points at it, with a tagged wire', () => {
+  const { h, fxCalls, advance } = make();
+  const win = konsole();
+  h.setWindows({ fg: 9, wins: [win] });
+  h.pointAt(win, { label: 'CLAUDE' });
+  advance(2.5);
+  assert.equal(h.mode, 'point');
+  assert.equal(h.pointing.rect.id, 5);
+  for (const r of h.hitRects()) assert.ok(!overlaps(r, win), 'she stands beside it, not on it');
+  const wire = fxCalls.find((c) => c[0] === 'pointer');
+  assert.ok(wire, 'a wire from her finger');
+  assert.equal(wire[3].label, 'CLAUDE');
+  const side = h.pointing.side;
+  assert.ok(h.pose[side === 'R' ? 'armR' : 'armL'] > 0.5, 'her arm is up toward it');
+});
+
+test('stopPointing lets go', () => {
+  const { h, advance } = make();
+  h.setWindows({ fg: 9, wins: [konsole()] });
+  h.pointAt(konsole(), { label: 'CLAUDE' });
+  advance(2.5);
+  h.stopPointing();
+  advance(0.5);
+  assert.equal(h.pointing, null);
+  assert.notEqual(h.mode, 'point');
+});
+
+test('canPoint refuses windows you could not see', () => {
+  const { h } = make();
+  h.setWindows({ fg: 5, wins: [konsole()] });
+  assert.equal(h.canPoint(konsole()), true);
+  assert.equal(h.canPoint(konsole({ max: true })), false, 'maximised');
+  assert.equal(h.canPoint({ ...konsole(), w: 80 }), false, 'tiny');
+  h.setWindows({ fg: 9, wins: [{ id: 9, x: 0, y: 300, w: 2560, h: 900, max: false }, konsole()] });
+  assert.equal(h.canPoint(konsole()), false, 'its top is under another window');
+  assert.equal(h.canPoint(null), false);
+});
+
+test('spotNear keeps her on screen beside the window, wherever it is', () => {
+  const { h } = make();
+  for (const win of [konsole({ x: 0, y: 40 }), konsole({ x: 1660, y: 40 }), konsole({ x: 0, y: 900 }), konsole({ x: 1660, y: 900 }), konsole({ x: 200, y: 200, w: 2200 })]) {
+    const s = h.spotNear(win);
+    assert.ok(s.x - h.size.w / 2 >= AREA.x && s.x + h.size.w / 2 <= AREA.x + AREA.w, JSON.stringify(win));
+    assert.ok(s.y <= AREA.y + AREA.h && s.y - h.size.h >= AREA.y, JSON.stringify(win));
+  }
+});
+
 // ---- final review fix: the background (Ctrl+Alt+H) always holds ----
 
 test('background pressed mid-teleport stays background', () => {
@@ -359,4 +520,58 @@ test('an act asked for during her victory waits: the victory finishes and resolv
   assert.equal(resolved, true);
   assert.ok(played.includes('exit0'));
   assert.ok(!played.includes('hop') && !played.includes('segfault'), 'nothing cut the victory short');
+});
+
+// ---- throwing (M2, rebuilt from the spec) ----
+
+function fling(h, advance, to) {
+  const start = { x: h.pos.x, y: h.pos.y - 120 };
+  assert.equal(h.onDragStart(start), true);
+  // three quick moves: fast enough to throw her
+  for (let i = 1; i <= 3; i++) {
+    advance(0.016);
+    h.onDragMove({ x: start.x + (to.x - start.x) * (i / 3), y: start.y + (to.y - start.y) * (i / 3) });
+  }
+  h.onDragEnd({ x: to.x, y: to.y });
+}
+
+test('let go mid-swing, she flies off and lands', () => {
+  const { h, advance } = make();
+  fling(h, advance, { x: h.pos.x - 300, y: h.pos.y - 400 });
+  assert.equal(h.mode, 'thrown');
+  advance(4);
+  assert.notEqual(h.mode, 'thrown');
+  assert.equal(h.pos.y, floor);
+});
+
+test('three throws in a row and she gets mad: no picking her up for a while', () => {
+  const { h, advance, said } = make();
+  for (let i = 0; i < 3; i++) {
+    fling(h, advance, { x: h.pos.x - 300, y: h.pos.y - 400 });
+    advance(4);
+  }
+  assert.ok(said.includes('mad'));
+  assert.equal(h.onDragStart({ x: h.pos.x, y: h.pos.y - 120 }), false, 'she won\'t be picked up');
+  advance(16, 1);
+  assert.equal(h.onDragStart({ x: h.pos.x, y: h.pos.y - 120 }), true, 'she forgives you after a while');
+});
+
+test('you can catch her mid-air', () => {
+  const { h, advance } = make();
+  fling(h, advance, { x: h.pos.x - 300, y: h.pos.y - 400 });
+  advance(0.1);
+  const [x, y, w, hh] = h.hitRects()[0];
+  assert.equal(h.onDragStart({ x: x + w / 2, y: y + hh / 2 }), true);
+  assert.equal(h.mode, 'drag');
+});
+
+test('arriving on another screen she appears near your pointer', () => {
+  const { h, played, advance } = make();
+  h.setArea({ x: 0, y: 0, w: 1920, h: 1080 });
+  h.onPointer({ x: 900, y: 500, inside: false });
+  h.arrive();
+  advance(1);
+  assert.ok(played.includes('teleportIn'));
+  assert.ok(Math.abs(h.pos.x - 900) < 300 && h.pos.y <= 1080);
+  assert.notEqual(h.mode, 'teleport');
 });

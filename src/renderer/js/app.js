@@ -12,6 +12,7 @@ import { Voice } from './voice.js';
 import { Brain } from './brain.js';
 import { linesFor } from './lines/index.js';
 import { pick, fmt } from './util.js';
+import { Guide } from './guide.js';
 
 const host = window.host;
 const HIT_EVERY_MS = 33;
@@ -40,7 +41,7 @@ const startArea = await host.getArea();
 let area = { x: startArea.x, y: startArea.y, w: startArea.w, h: startArea.h };
 const hexa = new Hexa({
   rig, player, fx, voice, area, scale: cfg.scale, now: () => performance.now(),
-  settings: { wander: cfg.wander, motion: cfg.motion, reducedMotion: cfg.reducedMotion },
+  settings: { wander: cfg.wander, possess: cfg.possess, motion: cfg.motion, reducedMotion: cfg.reducedMotion },
 });
 const panel = new Panel({ root: ui, voice, glyphs: pack.glyphs, palette: pack.palette });
 const brain = new Brain({ hexa, panel, voice, lang: cfg.lang || 'en' });
@@ -59,6 +60,7 @@ panel.setTicker = (t) => {
 };
 
 const lines = () => linesFor(cfg.lang || 'en');
+const guide = new Guide({ hexa, panel, host, brain, lines });
 const vars = { name: 'Claude', user: 'there' };
 hexa.onSay = (key) => {
   const t = lines();
@@ -96,6 +98,8 @@ host.onCommand(({ name, on }) => {
   else if (name === 'teleport') hexa.teleport();
   else if (name === 'resume') brain.resume();
   else if (name === 'showcase') showcase();
+  else if (name === 'guide') guide.menu();
+  else if (name === 'arrive') hexa.arrive();
 });
 
 host.onConfig((c) => {
@@ -103,13 +107,25 @@ host.onConfig((c) => {
   voice.setMuted(c.muted);
   voice.setVolume(c.volume);
   hexa.setScale(c.scale);
-  hexa.setSettings({ wander: c.wander, motion: c.motion, reducedMotion: c.reducedMotion });
+  hexa.setSettings({ wander: c.wander, possess: c.possess, motion: c.motion, reducedMotion: c.reducedMotion });
   brain.watching = c.claude;
 });
 
 host.onPointer((p) => hexa.onPointer(p));
 
-host.answerState(() => ({ mode: hexa.mode, pos: hexa.pos, hitRects: [...hexa.hitRects(), ...panel.rects()] }));
+// where your windows are (front first), for sitting on them and knowing which one is Claude's
+host.onWindows((snap) => {
+  hexa.setWindows(snap);
+  brain.onWindows(snap);
+});
+
+host.answerState(() => ({
+  mode: hexa.mode,
+  pos: hexa.pos,
+  perch: hexa.perch,
+  pointing: hexa.pointing ? { id: hexa.pointing.rect.id ?? null, label: hexa.pointing.label } : null,
+  hitRects: [...hexa.hitRects(), ...panel.rects()],
+}));
 
 // ---- the mouse, on her ----
 
@@ -227,9 +243,10 @@ if (!cfg.visible) {
 } else {
   hexa.boot();
   if (!cfg.welcomed) {
+    // her welcome, the first time: who she is, and plugging her into Claude in one click
     setTimeout(() => {
-      panel.say({ kind: 'info', line: 'Right-click me for my menu. "Install Claude Code hooks" plugs me into Claude.', face: 'smug', hold: 9000 });
       host.setConfig({ welcomed: true });
+      guide.welcome();
     }, 6500);
   }
 }

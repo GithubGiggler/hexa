@@ -60,9 +60,21 @@ function chooseDisplay(displays, wantedId, primaryId) {
   return displays.find((d) => d.id === wantedId) || displays.find((d) => d.id === primaryId) || displays[0];
 }
 
+// Where two displays touch: { side (of a), from, to } along that side, or null if they don't.
+// Displays are { x, y, width, height }.
+function sharedEdge(a, b) {
+  const overlap = (a0, a1, b0, b1) => (Math.min(a1, b1) > Math.max(a0, b0) ? [Math.max(a0, b0), Math.min(a1, b1)] : null);
+  const span = (side, range) => (range ? { side, from: range[0], to: range[1] } : null);
+  if (b.y + b.height === a.y) return span('top', overlap(a.x, a.x + a.width, b.x, b.x + b.width));
+  if (a.y + a.height === b.y) return span('bottom', overlap(a.x, a.x + a.width, b.x, b.x + b.width));
+  if (a.x + a.width === b.x) return span('right', overlap(a.y, a.y + a.height, b.y, b.y + b.height));
+  if (b.x + b.width === a.x) return span('left', overlap(a.y, a.y + a.height, b.y, b.y + b.height));
+  return null;
+}
+
 function rectsEqual(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
   return a.every((r, i) => r.length === b[i].length && r.every((v, k) => v === b[i][k]));
 }
 
-module.exports = { toPhysical, mergeRects, chooseDisplay, rectsEqual };
+module.exports = { toPhysical, mergeRects, chooseDisplay, rectsEqual, sharedEdge };

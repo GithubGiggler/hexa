@@ -77,3 +77,46 @@ test('draw runs on a canvas for every effect', () => {
   fx.draw(ctx, 800, 600);
   assert.ok(calls.includes('stroke') && calls.includes('fill'));
 });
+
+test('visibleParts: a window minus the windows in front of it', async () => {
+  const { visibleParts } = await import('../src/renderer/js/fx.js');
+  const area = (rs) => rs.reduce((n, r) => n + r.w * r.h, 0);
+  const win = { x: 0, y: 0, w: 100, h: 100 };
+  assert.equal(area(visibleParts(win, [])), 10000);
+  assert.equal(area(visibleParts(win, [{ x: 50, y: 0, w: 100, h: 100 }])), 5000);
+  assert.equal(area(visibleParts(win, [{ x: 25, y: 25, w: 50, h: 50 }])), 7500);
+  assert.equal(area(visibleParts(win, [{ x: -10, y: -10, w: 200, h: 200 }])), 0);
+  const parts = visibleParts(win, [{ x: 25, y: 25, w: 50, h: 50 }, { x: 0, y: 0, w: 10, h: 10 }]);
+  assert.equal(area(parts), 7400);
+  for (const p of parts) assert.ok(!(p.x < 75 && p.x + p.w > 25 && p.y < 75 && p.y + p.h > 25), 'nothing drawn over a covering window');
+});
+
+test('possess draws on the window, lasts until leave(), and follows the window', () => {
+  const fx = new Fx({ palette, rand });
+  let rect = { x: 100, y: 100, w: 600, h: 400 };
+  const taken = fx.possess(() => rect, { covers: () => [], look: () => ({ x: 300, y: 300 }), glyphs: { laugh: [['#####', '#####', '#####', '#####', '#####'], ['#####', '#####', '#####', '#####', '#####']], wide: [['#####', '#####', '#####', '#####', '#####'], ['#####', '#####', '#####', '#####', '#####']] } });
+  run(fx, 1);
+  assert.ok(fx.effects.some((e) => e.kind === 'possess'));
+  rect = { x: 300, y: 200, w: 600, h: 400 };
+  const calls = [];
+  const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : (...a) => { calls.push([k, ...a]); return { addColorStop() {} }; }), set: (t, k, v) => { t[k] = v; return true; } });
+  fx.draw(ctx);
+  assert.ok(calls.some(([k, x, y]) => k === 'strokeRect' && x === 300 && y === 200), 'drawn where the window is now');
+  taken.leave();
+  run(fx, 1);
+  assert.ok(!fx.effects.some((e) => e.kind === 'possess'));
+});
+
+test('pointer: a tagged wire to a window, reeled back in on retract', () => {
+  const fx = new Fx({ palette, rand });
+  const wire = fx.pointer(() => ({ x: 10, y: 10 }), () => ({ x: 100, y: 100, w: 300, h: 200 }), { label: 'CLAUDE' });
+  run(fx, 1);
+  assert.ok(fx.effects.some((e) => e.kind === 'pointer'), 'holds while pointing');
+  const calls = [];
+  const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : (...a) => { calls.push([k, ...a]); return { addColorStop() {}, width: 40 }; }), set: (t, k, v) => { t[k] = v; return true; } });
+  fx.draw(ctx);
+  assert.ok(calls.some(([k, text]) => k === 'fillText' && text === 'CLAUDE'));
+  wire.retract();
+  run(fx, 0.6);
+  assert.ok(!fx.effects.some((e) => e.kind === 'pointer'));
+});

@@ -8,5 +8,5 @@ export const LANGS = Object.keys(TABLES);
 
 export function linesFor(lang) {
   const table = TABLES[lang] || en;
-  return { ...en.LINES, ...table.LINES, verbs: table.VERBS || en.VERBS };
+  return { ...en.LINES, ...table.LINES, verbs: table.VERBS || en.VERBS, guide: { ...en.GUIDE, ...(table.GUIDE || {}) } };
 }

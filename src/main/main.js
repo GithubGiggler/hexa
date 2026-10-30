@@ -20,7 +20,11 @@ const claudeHooks = require('./hooks/claude');
 const { registerPrivileged, registerHexaProtocol } = require('./protocol');
 const { buildMenu, createTray } = require('./tray');
 const { trayLabels } = require('./labels');
+const { screen } = require('electron');
 const { playDemo } = require('./demo');
+const { startX11Windows } = require('./platform/linux/windows-x11');
+const { startKwinWindows } = require('./platform/linux/kwin');
+const { parentChain, windowForChain } = require('./platform/linux/proc');
 
 const DEV = process.argv.includes('--dev');
 const appDir = app.getAppPath();
@@ -52,7 +56,11 @@ try {
   // no log file: the console still works
 }
 
+let quitReason = 'a signal or the session ending';
+
 if (!app.requestSingleInstanceLock()) {
+  console.log('[hexa] another Hexa is already running: this one quits');
+  quitReason = 'another Hexa is already running';
   app.quit();
 } else {
   start();
@@ -66,6 +74,8 @@ function start() {
   let reducedMotion = false;
   let trayStatus = null;
   let stopDemo = null;
+  let windows = null;          // the window tracker
+  let lastWindows = { fg: 0, wins: [] };
   const pendingState = new Map();
   let stateSeq = 0;
 
@@ -97,7 +107,8 @@ function start() {
 
   function trayState() {
     const cfg = config.load();
-    return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, startAtLogin: autostart.isEnabled(), hooks: claudeHooks.status(), status: trayStatus };
+    const displays = screen.getAllDisplays().map((d, i) => ({ id: d.id, label: `Screen ${i + 1} (${d.bounds.width}×${d.bounds.height})`, current: d.id === overlay?.display.id }));
+    return { visible: cfg.visible, scale: cfg.scale, muted: cfg.muted, wander: cfg.wander, possess: cfg.possess, follow: cfg.follow, displays, startAtLogin: autostart.isEnabled(), hooks: claudeHooks.status(), status: trayStatus };
   }
 
   const actions = {
@@ -108,6 +119,7 @@ function start() {
       trayHandle?.rebuild();
     },
     teleport: () => send('hexa:command', { name: 'teleport' }),
+    guide: () => send('hexa:command', { name: 'guide' }),
     demo: () => {
       stopDemo?.();
       stopDemo = playDemo((evt) => send('hexa:event', evt));
@@ -120,6 +132,13 @@ function start() {
       shell.openPath(dir);
     },
     wander: (wander) => updateConfig({ wander }),
+    possess: (possess) => updateConfig({ possess }),
+    follow: (follow) => updateConfig({ follow }),
+    screen: (id) => {
+      config.save({ displayId: id });
+      moveTo(id);
+      trayHandle?.rebuild();
+    },
     startup: (on) => {
       if (on) autostart.enable({ exec: process.env.APPIMAGE || process.execPath, args: app.isPackaged ? [] : [appDir] });
       else autostart.disable();
@@ -135,8 +154,22 @@ function start() {
       }
       trayHandle?.rebuild();
     },
-    quit: () => app.quit(),
+    quit: () => {
+      quitReason = 'from her menu';
+      app.quit();
+    },
   };
+
+  // Her overlay to another display, and her appearing there.
+  function moveTo(id) {
+    if (!overlay || overlay.display.id === id) return;
+    overlay.refit(id);
+    send('hexa:command', { name: 'arrive' });
+    trayHandle?.rebuild();
+  }
+
+  // the display your pointer is on
+  const pointerDisplay = () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
 
   // a question only the renderer can answer (where she is, what she's doing), for /debug/state
   function askRenderer() {
@@ -159,7 +192,7 @@ function start() {
       fs.writeFileSync(file, image.toPNG());
       return { ok: true, file };
     }
-    if (name === 'state') return { ok: true, ...(await askRenderer()), overlay: overlay.mode, display: overlay.display.bounds, xid: overlay.xid };
+    if (name === 'state') return { ok: true, ...(await askRenderer()), overlay: overlay.mode, display: overlay.display.bounds, xid: overlay.xid, windows: lastWindows };
     return { ok: false, error: `no debug route "${name}"` };
   }
 
@@ -198,6 +231,27 @@ function start() {
       }
     });
     ipcMain.handle('hooks:status', () => claudeHooks.status());
+    // her guide: ~/.claude in your file manager, settings.json selected when it exists
+    ipcMain.handle('guide:claudeFolder', () => {
+      const file = claudeHooks.settingsPath();
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      if (fs.existsSync(file)) shell.showItemInFolder(file);
+      else shell.openPath(path.dirname(file));
+      return true;
+    });
+    // where her tray icon is: the tray's own bounds when the desktop reports them (on KDE's
+    // StatusNotifierItem it doesn't), else the panel's end of the screen, from the work area
+    ipcMain.handle('guide:tray', () => {
+      const d = overlay.display;
+      const b = d.bounds;
+      const wa = d.workArea;
+      const t = trayHandle?.tray.getBounds?.();
+      if (t && t.width > 0 && t.height > 0) return [t.x - b.x, t.y - b.y, t.width, t.height];
+      if (wa.y > b.y) return [b.width - 260, 0, 240, wa.y - b.y];                                // panel on top
+      const bottom = wa.y + wa.height;
+      if (bottom < b.y + b.height) return [b.width - 260, bottom - b.y, 240, b.y + b.height - bottom]; // at the bottom
+      return null; // no panel on this screen
+    });
     ipcMain.handle('hooks:install', () => installHooks());
     ipcMain.on('debug:state', (_e, { id, state }) => {
       const resolve = pendingState.get(id);
@@ -224,10 +278,37 @@ function start() {
     });
     console.log(`[hexa] overlay on display ${overlay.display.id} (${overlay.display.bounds.width}×${overlay.display.bounds.height}), click-through by ${overlay.mode}`);
 
+    // where your windows are: from KWin itself on Plasma Wayland (XWayland only sees its own
+    // windows), from the X server everywhere else
+    const onUpdate = (snap) => {
+      lastWindows = snap;
+      send('windows:update', snap);
+    };
+    const plasmaWayland = Boolean(process.env.WAYLAND_DISPLAY) && /KDE/i.test(process.env.XDG_CURRENT_DESKTOP || '');
+    const startTracker = plasmaWayland
+      ? () => startKwinWindows({ getDisplay: () => overlay.display, onUpdate })
+      : x11 ? () => startX11Windows({ x11, selfXid: overlay.xid, getDisplay: () => overlay.display, onUpdate }) : null;
+    windows = startTracker ? await startTracker().catch((err) => {
+      console.error('[hexa] window tracking unavailable:', err.message);
+      return null;
+    }) : null;
+    if (windows) console.log(`[hexa] window tracking by ${plasmaWayland ? 'KWin' : 'X11'}`);
+
     try {
       bridge = await createBridge({
         socketPath: paths.socketPath(),
-        onEvent: (evt) => send('hexa:event', evt),
+        onEvent: (evt) => {
+          // Claude needs you: she comes to the screen you're on first
+          if (evt.hook_event_name === 'Notification' && ['permission_prompt', 'elicitation_dialog', 'elicitation_url_dialog', 'agent_needs_input'].includes(evt.notification_type)) {
+            moveTo(pointerDisplay().id);
+          }
+          // Claude's window: the closest process up the hook's tree that owns one
+          if (evt.ppid) {
+            const win = windowForChain(parentChain(evt.ppid), lastWindows.wins);
+            if (win) evt.window_id = win.id;
+          }
+          send('hexa:event', evt);
+        },
         onCli,
         onDebug: DEV ? onDebug : undefined,
       });
@@ -246,11 +327,35 @@ function start() {
 
     if (!globalShortcut.register(cfg.shortcut, actions.toggle)) console.warn(`[hexa] could not register ${cfg.shortcut}`);
     powerMonitor.on('resume', () => send('hexa:command', { name: 'resume' }));
+
+    // your pointer on another screen for 3 s: she follows you there
+    let awaySince = null;
+    setInterval(() => {
+      if (!overlay || !config.load().follow || !config.load().visible) {
+        awaySince = null;
+        return;
+      }
+      const d = pointerDisplay();
+      if (d.id === overlay.display.id) {
+        awaySince = null;
+        return;
+      }
+      awaySince ??= Date.now();
+      if (Date.now() - awaySince >= 3000) {
+        awaySince = null;
+        moveTo(d.id);
+      }
+    }, 500);
   });
+
+  // why she stopped, for the log. Electron answers SIGTERM and SIGINT itself (a Node handler for
+  // them never runs), so a quit nobody asked for here is a signal or the session ending.
+  app.on('before-quit', () => console.log(`[hexa] quitting (${quitReason})`));
 
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     bridge?.close();
+    windows?.stop();
     overlay?.destroy();
     x11?.close();
   });

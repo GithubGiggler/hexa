@@ -1,0 +1,12 @@
+{
+  "KPlugin": {
+    "Id": "hexa-windows",
+    "Name": "Hexa window reporter",
+    "Description": "Tells Hexa where your windows are (geometry, state, process and window class only; never titles or contents).",
+    "Version": "1.0",
+    "License": "MIT"
+  },
+  "X-Plasma-API": "javascript",
+  "X-Plasma-MainScript": "code/main.js",
+  "KPackageStructure": "KWin/Script"
+}

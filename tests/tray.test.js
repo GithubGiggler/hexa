@@ -37,6 +37,16 @@ test('background toggle and checkboxes follow the state; quit is last', () => {
   assert.equal(menu.at(-1).label, t.quit);
 });
 
+test('possess my windows follows the config and toggles', () => {
+  const hit = [];
+  const act = new Proxy({}, { get: (_, k) => (v) => hit.push([k, v]) });
+  const on = buildMenu({ ...base, possess: true }, t, act);
+  assert.equal(find(on, t.possess).checked, true);
+  find(on, t.possess).click();
+  assert.deepEqual(hit.at(-1), ['possess', false]);
+  assert.equal(find(buildMenu({ ...base, possess: false }, t, act), t.possess).checked, false);
+});
+
 test('the status line comes first and is not clickable', () => {
   const menu = buildMenu({ ...base, status: 'Transparency needs a compositor' }, t, noop);
   assert.equal(menu[0].label, 'Transparency needs a compositor');
@@ -51,4 +61,18 @@ test('clicks reach their actions', () => {
   find(menu, t.hooksOff).click();
   find(menu, t.quit).click();
   assert.deepEqual(hit, ['size', 'installHooks', 'quit']);
+});
+
+test('a Screen submenu lists the displays, and following can be turned off', () => {
+  const hit = [];
+  const act = new Proxy({}, { get: (_, k) => (v) => hit.push([k, v]) });
+  const displays = [{ id: 11, label: 'Screen 1 (2560×1440)', current: true }, { id: 22, label: 'Screen 2 (1920×1080)', current: false }];
+  const menu = buildMenu({ ...base, displays, follow: true }, t, act);
+  const screens = find(menu, t.screen).submenu.filter((i) => i.type === 'radio'); // the displays; the follow toggle sits below them
+  assert.deepEqual(screens.map((i) => [i.label, i.checked]), [['Screen 1 (2560×1440)', true], ['Screen 2 (1920×1080)', false]]);
+  screens[1].click();
+  assert.deepEqual(hit.at(-1), ['screen', 22]);
+  assert.equal(find(menu, t.follow).checked, true);
+  find(menu, t.follow).click();
+  assert.deepEqual(hit.at(-1), ['follow', false]);
 });

@@ -249,6 +249,18 @@ export const ACTS = {
     ],
   },
 
+  // thrown and down on the floor: sprawled flat, seeing stars, then back up and shaking it off
+  sprawl: {
+    keys: [
+      [6, { tilt: 80, bob: 28, arms: 1.2, visor: 'dizzy' }],
+      [10, { tilt: 84, bob: 30, arms: 1.3, visor: 'dizzy' }],
+      [3, { tilt: 40, bob: 12, visor: 'dizzy' }],
+      [3, { tilt: -6, bob: -2, head: 0.2 }],
+      [2, { head: -0.2 }],
+      [2, {}],
+    ],
+  },
+
   // folding down into her core
   suspend: {
     keys: [
@@ -265,6 +277,26 @@ export const ACTS = {
       [2, { sy: 0.7, sx: 0.85, bob: 8 }],
       [2, { sy: 1.1, sx: 0.95, bob: -3, visor: 'wide' }],
       [3, { visor: 'calm' }],
+    ],
+  },
+
+  // pointing at something: her head snaps to it, she coils away, then strikes (her arm is aimed by
+  // hexa.js while she points; this is the body around it)
+  point: {
+    directional: true,
+    keys: [
+      [2, { head: 0.25, tilt: -2, visor: 'wide' }],
+      [3, { head: 0.3, tilt: -10, bristle: 0.5, sy: 0.95, visor: 'squint' }],
+      [1, { tilt: 8, smear: [16, 0], bristle: 1 }, 'lock'],
+      [4, { tilt: 5, visor: 'smug' }],
+    ],
+  },
+
+  unpoint: {
+    directional: true,
+    keys: [
+      [2, { tilt: -4 }],
+      [2, {}],
     ],
   },
 

@@ -5,7 +5,8 @@
 
 const SIZES = [['small', 0.8], ['medium', 1], ['large', 1.25]];
 
-// state: { visible, scale, muted, wander, startAtLogin, hooks: { installed, error? }, status? }
+// state: { visible, scale, muted, wander, possess, follow, displays: [{ id, label, current }], startAtLogin,
+//          hooks: { installed, error? }, status? }
 // act: callbacks named after what they do
 function buildMenu(state, t, act) {
   const sep = { type: 'separator' };
@@ -21,6 +22,7 @@ function buildMenu(state, t, act) {
     state.visible ? { label: t.hide, click: () => act.toggle() } : { label: t.show, click: () => act.toggle() },
     { label: t.teleport, enabled: Boolean(state.visible), click: () => act.teleport() },
     { label: t.demo, click: () => act.demo() },
+    { label: t.help, click: () => act.guide() },
     sep,
     {
       label: t.size,
@@ -35,7 +37,16 @@ function buildMenu(state, t, act) {
         { label: t.soundsDir, click: () => act.soundsDir() },
       ],
     },
+    {
+      label: t.screen,
+      submenu: [
+        ...(state.displays || []).map((d) => ({ label: d.label, type: 'radio', checked: Boolean(d.current), click: () => act.screen(d.id) })),
+        { type: 'separator' },
+        { label: t.follow, type: 'checkbox', checked: state.follow !== false, click: () => act.follow(state.follow === false) },
+      ],
+    },
     { label: t.wander, type: 'checkbox', checked: Boolean(state.wander), click: () => act.wander(!state.wander) },
+    { label: t.possess, type: 'checkbox', checked: state.possess !== false, click: () => act.possess(state.possess === false) },
     { label: t.startup, type: 'checkbox', checked: Boolean(state.startAtLogin), click: () => act.startup(!state.startAtLogin) },
     sep,
     ...hookItems,
