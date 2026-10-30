@@ -46,13 +46,14 @@ function noticeFor(evt) {
 }
 
 // notify: notifications.js's. away(): true while she's in the background or Do Not Disturb is on.
-function createNotices({ notify, away }) {
+// follows(evt): is it the assistant she watches (the others' news isn't hers to bring you)?
+function createNotices({ notify, away, follows = () => true }) {
   const last = new Map(); // session -> its notification, so its newer news replaces the older
 
   async function see(evt) {
     const session = String(evt?.session_id || 'default');
     if (evt?.hook_event_name === 'SessionEnd') last.delete(session);
-    if (!away()) return null;
+    if (!away() || !follows(evt)) return null;
     const n = noticeFor(evt);
     if (!n) return null;
     // normal urgency, even for "needs you": a critical one would break through Do Not Disturb

@@ -87,3 +87,13 @@ test('a notification that could not be sent is not remembered', async () => {
   await notices.see({ hook_event_name: 'Stop', session_id: 'a' });
   assert.equal(sent[1].replaces, 0);
 });
+
+test('only the assistant she watches brings news, named as itself', async () => {
+  const sent = [];
+  const { ownerOf } = require('../src/main/hooks');
+  const notices = createNotices({ notify: async (n) => { sent.push(n); return 1; }, away: () => true, follows: (evt) => ownerOf(evt) === 'codex' });
+  assert.equal(await notices.see({ hook_event_name: 'Stop', session_id: 'claude-session', assistant: 'claude', cwd: CWD }), null);
+  await notices.see({ hook_event_name: 'Stop', session_id: 'codex:abc', assistant: 'codex', cwd: CWD });
+  assert.deepEqual(sent.map((n) => n.title), ['Codex is done']);
+  assert.equal(noticeFor({ hook_event_name: 'Notification', notification_type: 'permission_prompt', assistant: 'agy' }).title, 'Antigravity needs you');
+});

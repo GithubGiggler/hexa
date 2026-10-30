@@ -177,6 +177,122 @@ test('codex sessions ignored while watching claude; demo events always handled',
   assert.equal(said.length, 1);
 });
 
+test('watching Codex: its sessions count, Claude’s and Antigravity’s don’t, and she calls it Codex', () => {
+  const { brain, said, calls } = rig();
+  brain.watch('codex');
+  assert.equal(brain.name, 'Codex');
+  brain.handle({ hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: 'x' });
+  brain.handle({ hook_event_name: 'UserPromptSubmit', session_id: 'agy:c1' });
+  assert.equal(said.length, 0);
+  brain.handle({ hook_event_name: 'UserPromptSubmit', session_id: 'codex:t1', cwd: '/home/u/projects/penguin-api', prompt: 'Add a /search endpoint' });
+  assert.equal(said.at(-1).quote, 'Add a /search endpoint');
+  assert.equal(said.at(-1).tag, 'penguin-api');
+  assert.ok(has(calls, 'goToWork'));
+  assert.deepEqual([...brain.sessions.keys()], ['codex:t1']);
+});
+
+test('Antigravity sessions count while she watches it', () => {
+  const { brain, said } = rig();
+  const b2 = new Brain({ hexa: brain.hexa, panel: brain.panel, voice: brain.voice, assistant: 'agy', now: brain.now });
+  b2.linked = true;
+  b2.handle({ hook_event_name: 'UserPromptSubmit', session_id: 'agy:c1', cwd: '/w/p' });
+  b2.handle({ hook_event_name: 'UserPromptSubmit', session_id: 'codex:t1' });
+  assert.equal(said.length, 1);
+  assert.equal(b2.name, 'Antigravity');
+  assert.equal(Brain.ownerOf('agy:c1'), 'agy');
+  assert.equal(Brain.ownerOf('codex:x'), 'codex');
+  assert.equal(Brain.ownerOf('6f0c-…'), 'claude');
+  assert.equal(Brain.ownerOf(undefined), 'claude');
+});
+
+test('switching who she watches drops the other’s sessions: a job left running doesn’t keep her at work', () => {
+  const { brain, panel, calls } = rig();
+  brain.handle(evt('UserPromptSubmit', { prompt: 'x' }));
+  brain.handle(evt('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'npm test' } }));
+  assert.equal(brain.busySessions.length, 1);
+  calls.length = 0;
+  brain.watch('codex');
+  assert.equal(brain.sessions.size, 0);
+  assert.equal(panel.ticker, null);
+  assert.ok(calls.some((c) => c[0] === 'setMode' && c[1] === 'idle'));
+  calls.length = 0;
+  brain.watch('codex'); // the same again: nothing happens
+  assert.deepEqual(calls, []);
+});
+
+test('pointing at the window of a Codex session says CODEX', () => {
+  const { brain, hexa, calls } = rig();
+  brain.watch('codex');
+  hexa.canPoint = () => true;
+  hexa.pointAt = (...a) => { calls.push(['pointAt', ...a]); return Promise.resolve(true); };
+  const e = (name, extra) => ({ hook_event_name: name, session_id: 'codex:t1', ...extra });
+  brain.onWindows({ fg: 55, wins: [{ id: 55, x: 100, y: 100, w: 800, h: 600, max: false }] });
+  brain.handle(e('UserPromptSubmit', { prompt: 'x', window_id: 55 }));
+  brain.onWindows({ fg: 99, wins: [{ id: 99, x: 1000, y: 100, w: 800, h: 600, max: false }, { id: 55, x: 100, y: 100, w: 800, h: 600, max: false }] });
+  brain.handle(e('Notification', { notification_type: 'permission_prompt', message: 'Run npm test?' }));
+  assert.equal(calls.find((c) => c[0] === 'pointAt')[2].label, 'CODEX');
+});
+
+test('a Codex turn through its real adapter: prompt, a patch, a command, done', async () => {
+  const { adapt } = await import('../hooks/hexa-codex-hook.js');
+  const { brain, said, panel, clock } = rig();
+  brain.watch('codex');
+  const codex = (e) => brain.handle(adapt({ session_id: 't1', cwd: '/home/u/projects/penguin-api', transcript_path: null, model: 'gpt-5.5', ...e }));
+  codex({ hook_event_name: 'UserPromptSubmit', turn_id: 'u1', prompt: 'Fix the tests' });
+  codex({ hook_event_name: 'PreToolUse', turn_id: 'u1', tool_name: 'apply_patch', tool_use_id: 'c1', tool_input: { command: '*** Begin Patch\n*** Update File: src/gigs.ts\n@@\n-a\n+b\n*** End Patch' } });
+  assert.deepEqual(panel.ticker, { verb: 'EDITS', target: 'gigs.ts', state: 'work' });
+  codex({ hook_event_name: 'PreToolUse', turn_id: 'u1', tool_name: 'Bash', tool_use_id: 'c2', tool_input: { command: 'npm test' } });
+  assert.deepEqual(panel.ticker, { verb: 'RUNS', target: 'npm test', state: 'work' });
+  clock.set(30000);
+  await codex({ hook_event_name: 'Stop', turn_id: 'u1', stop_hook_active: false, last_assistant_message: 'Fixed it. All tests pass.' });
+  assert.equal(said.at(-1).kind, 'done');
+  assert.equal(said.at(-1).quote, 'All tests pass.');
+  assert.match(said.at(-1).summary, /2 actions · 1 file changed/);
+});
+
+test('a Codex interrupt ends the turn like Esc in Claude Code', async () => {
+  const { adapt } = await import('../hooks/hexa-codex-hook.js');
+  const { brain, said } = rig();
+  brain.watch('codex');
+  brain.handle(adapt({ hook_event_name: 'UserPromptSubmit', session_id: 't1', prompt: 'x' }));
+  assert.equal(brain.busySessions.length, 1);
+  brain.handle(adapt({ hook_event_name: 'Interrupt', session_id: 't1', turn_id: 'u1' }));
+  assert.equal(brain.busySessions.length, 0);
+  assert.equal(said.at(-1).kind, 'info');
+});
+
+test('an Antigravity run through its real adapter: start, a command, done', async () => {
+  const { adapt } = await import('../hooks/hexa-agy-hook.js');
+  const { brain, said, panel } = rig();
+  brain.watch('agy');
+  const common = { conversationId: 'c1', workspacePaths: ['/workspace/project'], transcriptPath: '~/.gemini/antigravity/brain/c1/t.jsonl', modelName: 'gemini' };
+  brain.handle(adapt({ ...common, invocationNum: 0, initialNumSteps: 4 }, 'PreInvocation'));
+  assert.equal(said.at(-1).kind, 'work');
+  assert.equal(said.at(-1).tag, 'project');
+  assert.equal(adapt({ ...common, invocationNum: 1, initialNumSteps: 6 }, 'PreInvocation'), null);
+  brain.handle(adapt({ ...common, toolCall: { name: 'run_command', args: { CommandLine: 'npm test', Cwd: '/workspace/project' } }, stepIdx: 5, error: '' }, 'PostToolUse'));
+  assert.deepEqual(panel.ticker, { verb: 'RUNS', target: 'npm test', state: 'work' });
+  await brain.handle(adapt({ ...common, executionNum: 1, terminationReason: 'model_stop', error: '', fullyIdle: true }, 'Stop'));
+  assert.equal(said.at(-1).kind, 'done');
+});
+
+test('a tool with no prompt before it starts a task there, not at an older prompt', async () => {
+  const { brain, said, clock, calls } = rig();
+  brain.watch('agy');
+  const e = (name, extra) => ({ hook_event_name: name, session_id: 'agy:c1', cwd: '/w/p', ...extra });
+  brain.handle(e('UserPromptSubmit'));
+  brain.handle(e('PreToolUse', { tool_name: 'Read', tool_input: { file_path: '/w/p/a.ts' } }));
+  await brain.handle(e('Stop'));
+  // twenty minutes later, a run whose start she wasn't told about
+  clock.set(20 * 60 * 1000);
+  brain.handle(e('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } }));
+  clock.set(20 * 60 * 1000 + 5000);
+  calls.length = 0;
+  await brain.handle(e('Stop'));
+  assert.equal(said.at(-1).summary, '1 action · 5 s');
+  assert.ok(!calls.some((c) => c[0] === 'celebrate'), 'a small job, not the whole show');
+});
+
 test('the first real event says she can see Claude, once', () => {
   const { brain, said } = rig();
   brain.linked = false;

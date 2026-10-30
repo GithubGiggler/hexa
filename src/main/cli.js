@@ -20,6 +20,7 @@
 
 const path = require('node:path');
 const { clean } = require('./text');
+const { ASSISTANTS, assistantOf } = require('./hooks');
 
 const REACTIONS = new Set(['done', 'error', 'alert', 'hello', 'fork']);
 const FACE = /^[a-z][a-z0-9-]{0,23}$/;
@@ -44,7 +45,8 @@ const cwdOf = (value) => {
 
 // send(channel, payload): to the renderer. config: { load() }. actions: the tray's (toggle, demo).
 // sessions(): what main knows of each session (createSessionList below). notify: notifications.js's.
-// hooks: { install, uninstall, status }. linux(): { dnd, music }. stats(query): body for `hexa stats`,
+// hooks: { install, uninstall, status }, each called with the assistant ('claude', 'codex' or 'agy').
+// linux(): { dnd, music }. stats(query): body for `hexa stats`,
 // when someone has built it.
 function createCli({ send, config, actions, sessions = () => [], notify = async () => null, hooks, linux = () => ({ dnd: false, music: null }), stats = null, version = '' }) {
   const event = (fields) => send('hexa:event', { assistant: 'cli', session_id: 'cli', ...fields });
@@ -105,7 +107,9 @@ function createCli({ send, config, actions, sessions = () => [], notify = async 
 
     status() {
       const { dnd = false, music = null } = linux() || {};
-      const h = hooks?.status?.() || {};
+      // the hooks of the assistant she watches
+      const assistant = assistantOf(config.load().assistant) || 'claude';
+      const h = hooks?.status?.(assistant) || {};
       return ok({
         name: 'hexa',
         version,
@@ -113,8 +117,9 @@ function createCli({ send, config, actions, sessions = () => [], notify = async 
         visible: visible(),
         dnd: Boolean(dnd),
         music,
-        sessions: sessions().length,
-        hooks: { installed: Boolean(h.installed), ...(h.error ? { error: h.error } : {}) },
+        sessions: sessions().filter((s) => (s.assistant || 'claude') === assistant).length, // the watched one's
+        assistant,
+        hooks: { installed: Boolean(h.installed), ...(h.error ? { error: h.error } : {}), ...(h.warning ? { warning: h.warning } : {}) },
       });
     },
 
@@ -141,14 +146,14 @@ function createCli({ send, config, actions, sessions = () => [], notify = async 
     },
 
     hooks(body) {
-      const assistant = body.assistant ?? 'claude';
-      if (assistant !== 'claude') return bad(`hooks for "${clean(String(assistant), 20)}" aren't supported yet (only claude)`);
+      const assistant = assistantOf(body.assistant ?? 'claude');
+      if (!assistant) return bad(`hooks for "${clean(String(body.assistant), 20)}" aren't supported (only ${ASSISTANTS.join(', ')})`);
       const what = body.action;
       if (!['install', 'uninstall', 'status'].includes(what) || typeof hooks?.[what] !== 'function') {
         return bad('hooks takes install, uninstall or status');
       }
       try {
-        const r = hooks[what]() || {};
+        const r = hooks[what](assistant) || {};
         if (r.ok === false) return failed(r.error || `could not ${what} the hooks`);
         const { ok: _ok, ...rest } = r;
         return ok({ action: what, ...rest });

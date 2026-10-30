@@ -84,6 +84,34 @@ export class Brain {
     return { claude: 'Claude', codex: 'Codex', agy: 'Antigravity' }[this.assistant] || 'Claude';
   }
 
+  // Whose session it is: Codex's and Antigravity's hooks mark theirs (codex:..., agy:...).
+  static ownerOf(sessionId) {
+    return /^(codex|agy):/.exec(String(sessionId || ''))?.[1] || 'claude';
+  }
+
+  // She starts following another assistant (her menu's Watch): what she knew of the other one's
+  // sessions goes, so a job it left running doesn't keep her at work.
+  watch(assistant) {
+    if (assistant === this.assistant) return;
+    this.assistant = assistant;
+    for (const [id, s] of this.sessions) {
+      if (Brain.ownerOf(id) === assistant) continue;
+      this.sessions.delete(id);
+      if (s.waiting) {
+        this.hexa.markWaiting?.(false);
+        this.panel.clearKind('alert');
+      }
+      if (s.pointedAt) this.hexa.stopPointing?.();
+      if (this.replyFor === s) {
+        this.replyFor = null;
+        this.panel.clearKind('done');
+      }
+    }
+    this.thinking = null;
+    if (this.hexa.mode === 'alert' || this.hexa.alerting) this.hexa.setMode('idle');
+    this.settle();
+  }
+
   vars(s, extra = {}) {
     return { name: this.name, project: s?.project || this.name, user: this.userName || 'there', ...extra };
   }
@@ -125,8 +153,7 @@ export class Brain {
 
   handle(evt) {
     // Codex's and Antigravity's hooks mark their sessions (codex:..., agy:...): only the one she watches counts
-    const owner = /^(codex|agy):/.exec(String(evt.session_id || ''))?.[1] || 'claude';
-    if (!evt.demo && owner !== this.assistant) return undefined;
+    if (!evt.demo && Brain.ownerOf(evt.session_id) !== this.assistant) return undefined;
     if (!this.watching && !evt.demo) return undefined;
     const s = this.session(evt);
     // the first real event that ever reaches her (the demo's don't count)
@@ -188,6 +215,9 @@ export class Brain {
 
   onTool(evt, s) {
     const action = { ...describeTool(evt, this.t.verbs), state: 'work' };
+    // a tool with no prompt before it (she arrived mid-task, or it's an assistant whose hooks don't
+    // tell her every prompt, like Antigravity's): the task starts here, not at some older prompt
+    if (!s.working) Object.assign(s, { taskStart: this.now(), count: 0, files: new Set(), last: null });
     s.working = true;
     s.error = false;
     s.count += 1;
@@ -244,7 +274,7 @@ export class Brain {
         s.pointedAt = true;
         this.say('alert', this.line('alertHere', s), s, { face: 'wide', quote: clip(String(evt.message || ''), 200), hold: null });
         this.panel.setTicker({ verb: 'WAITING', target: 'for you', state: 'waiting' });
-        this.hexa.pointAt(win, { label: 'CLAUDE' });
+        this.hexa.pointAt(win, { label: this.name.toUpperCase() });
         return;
       }
       this.say('alert', this.line('alert', s), s, { face: 'wide', quote: clip(String(evt.message || ''), 200), hold: null });

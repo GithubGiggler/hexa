@@ -20,7 +20,8 @@ const DEFAULTS = {
   visible: true,       // false: she's in the background (just her core)
   welcomed: false,     // she has introduced herself
   linked: false,       // a real Claude Code event has reached her at least once
-  claude: true,        // she watches Claude Code (off: she just keeps you company)
+  claude: true,        // she watches her assistant (off: she just keeps you company)
+  assistant: 'claude', // whose work she follows: 'claude' (Claude Code), 'codex' (Codex CLI), 'agy' (Antigravity)
   motion: 'auto',      // 'auto' (like the desktop's animation setting), 'full' or 'reduced'
   shortcut: 'Ctrl+Alt+H',
   startAtLogin: false,
