@@ -19,6 +19,7 @@ function hexPath(ctx, x, y, r, rot = 0) {
 }
 
 const easeIn = (t) => t * t * t;
+const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
 
 // The parts of rect not covered by any of covers (rects { x, y, w, h }): what of a window you can
 // actually see, so possessing it never draws over the windows in front of it.
@@ -170,6 +171,26 @@ export class Fx {
 
   shockwave(x, y, { color } = {}) {
     this.effects.push({ kind: 'ring', x, y, life: 0.45, max: 0.45, color: color || this.palette.cyan });
+  }
+
+  // her, between vanishing and arriving: an orb on an arc from one spot to another, trailing
+  // lightning, higher the farther it goes. Gone when it lands, after ms.
+  orb(from, to, ms, { color } = {}) {
+    const dur = Math.max(0.05, ms / 1000);
+    const lift = Math.min(320, 60 + Math.hypot(to.x - from.x, to.y - from.y) * 0.3);
+    const e = {
+      kind: 'orb', from: { ...from }, to: { ...to }, ctrl: { x: (from.x + to.x) / 2, y: Math.min(from.y, to.y) - lift },
+      x: from.x, y: from.y, t: 0, life: dur, max: dur, clock: 0, trail: [{ x: from.x, y: from.y }], points: [],
+      color: color || this.palette.cyan,
+    };
+    this.effects.push(e);
+    return e;
+  }
+
+  // where she lands from it: two flat rings opening out at her feet, one after the other
+  rings(x, y, { color } = {}) {
+    this.effects.push({ kind: 'feetRing', x, y, life: 0.55, max: 0.55, color: color || this.palette.cyan });
+    this.effects.push({ kind: 'feetRing', x, y, life: 0.8, max: 0.8, wide: true, color: color || this.palette.cyan });
   }
 
   // where she was, after she teleports: a black slit with a cyan line in it
@@ -399,6 +420,21 @@ export class Fx {
 
     for (const e of this.effects) {
       if (e.kind === 'pointer') e.t += h;
+      if (e.kind === 'orb') {
+        e.t = Math.min(1, e.t + h / e.max);
+        const k = easeInOut(e.t);
+        const u = 1 - k;
+        e.x = u * u * e.from.x + 2 * u * k * e.ctrl.x + k * k * e.to.x;
+        e.y = u * u * e.from.y + 2 * u * k * e.ctrl.y + k * k * e.to.y;
+        e.trail.push({ x: e.x, y: e.y });
+        if (e.trail.length > 14) e.trail.shift();
+        e.clock += h;
+        if (e.clock >= DRAWING || e.points.length < 2) {
+          e.clock %= DRAWING;
+          // the trail redrawn on twos, a little jagged, like her bolts
+          e.points = e.trail.map((p, i) => (i === e.trail.length - 1 ? p : { x: p.x + this.r(-7, 7), y: p.y + this.r(-7, 7) }));
+        }
+      }
       if (e.kind === 'possess') {
         e.t += h;
         e.clock += h;
@@ -458,6 +494,39 @@ export class Fx {
         ctx.beginPath();
         ctx.moveTo(e.x, e.y - 40);
         ctx.lineTo(e.x, e.y + 40);
+        ctx.stroke();
+      } else if (e.kind === 'orb') {
+        if (e.points.length > 1) {
+          ctx.globalAlpha = 0.85;
+          ctx.strokeStyle = e.color;
+          ctx.shadowColor = e.color;
+          ctx.shadowBlur = 14;
+          ctx.lineWidth = 3;
+          this.polyline(ctx, e.points);
+          ctx.stroke();
+          ctx.strokeStyle = white;
+          ctx.lineWidth = 1.2;
+          this.polyline(ctx, e.points);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+        const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, 26);
+        g.addColorStop(0, white);
+        g.addColorStop(0.3, e.color);
+        g.addColorStop(1, 'rgba(62,242,255,0)');
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, 26, 0, TAU);
+        ctx.fill();
+      } else if (e.kind === 'feetRing') {
+        const t = 1 - k;
+        const rx = (e.wide ? 34 : 18) + (e.wide ? 120 : 80) * t;
+        ctx.globalAlpha = 0.9 * k;
+        ctx.strokeStyle = e.color;
+        ctx.lineWidth = 1.5 + 3 * k;
+        ctx.beginPath();
+        ctx.ellipse(e.x, e.y, rx, rx * 0.26, 0, 0, TAU);
         ctx.stroke();
       } else if (e.kind === 'ring') {
         const t = 1 - k;

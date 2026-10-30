@@ -68,10 +68,39 @@ test('glitch is active for its duration and reports its strength', () => {
   assert.equal(fx.glitching(), 0);
 });
 
+test('an orb arcs over the straight line from one spot to another, and is gone when it lands', () => {
+  const fx = new Fx({ palette, rand });
+  const orb = fx.orb({ x: 100, y: 800 }, { x: 900, y: 800 }, 600);
+  assert.deepEqual({ x: orb.x, y: orb.y }, { x: 100, y: 800 });
+  run(fx, 0.3);
+  assert.ok(orb.x > 300 && orb.x < 700, `x ${orb.x}`);
+  assert.ok(orb.y < 800 - 60, `mid-flight it rides above the line (y ${orb.y})`);
+  assert.ok(orb.trail.length > 2, 'it leaves a trail');
+  run(fx, 0.35);
+  assert.ok(!fx.effects.includes(orb));
+});
+
+test('an orb going up arcs higher than its destination', () => {
+  const fx = new Fx({ palette, rand });
+  const orb = fx.orb({ x: 500, y: 1300 }, { x: 900, y: 500 }, 800);
+  let top = Infinity;
+  for (let t = 0; t < 0.8; t += 0.02) { fx.update(0.02); top = Math.min(top, orb.y); }
+  assert.ok(top < 500, `top ${top}`);
+});
+
+test('rings: two of them, gone after a moment', () => {
+  const fx = new Fx({ palette, rand });
+  fx.rings(400, 900);
+  assert.equal(fx.effects.filter((e) => e.kind === 'feetRing').length, 2);
+  run(fx, 1);
+  assert.equal(fx.effects.length, 0);
+});
+
 test('draw runs on a canvas for every effect', () => {
   const fx = new Fx({ palette, rand });
   fx.shards(1, 1, 3); fx.bolt({ x: 0, y: 0 }, { x: 9, y: 9 }); fx.glyphs(1, 1); fx.sparks(1, 1);
   fx.speedLines(50, 50); fx.shockwave(5, 5); fx.slit(5, 5); fx.column(5, 5); fx.impact('white', 5, 5);
+  fx.orb({ x: 0, y: 0 }, { x: 300, y: 100 }, 400); fx.update(0.1); fx.rings(5, 5);
   const calls = [];
   const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : (...a) => { calls.push(k); return { addColorStop() {} }; }), set: (t, k, v) => { t[k] = v; return true; } });
   fx.draw(ctx, 800, 600);

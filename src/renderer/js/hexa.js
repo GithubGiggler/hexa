@@ -20,7 +20,8 @@ const ZAP_COOLDOWN = 20000;
 const FLOAT_RATE = 4.5;               // how fast she floats to a spot (per second, exponential)
 const ALERT_OFFSET = 70;              // how far beside your pointer she waits when Claude needs you
 const TELEPORT_FAR = 400;             // further than this, she teleports instead of floating
-const TELEPORT_GAP = 250;             // ms between vanishing and arriving
+const TRIP_MS = [260, 900];           // her trip as an orb between vanishing and arriving: shortest, longest
+const TRIP_MS_PER_PX = 0.45;
 const TELEPORT_WATCHDOG_MS = 2500;    // a teleport takes about 1 s; past this, she's put where she was going
 const SEAT_DY = 66;                   // from her hips down to her root, seated (thighs folded)
 const WANDER = [45000, 90000];
@@ -483,11 +484,17 @@ export class Hexa {
       },
       onEnd: () => {
         this.hidden = true;
-        this.later(TELEPORT_GAP, () => {
+        // in transit: an orb from where her body was to where it will be, a longer trip for farther
+        const from = this.body();
+        const to = { x: from.x + dest.x - this.pos.x, y: from.y + dest.y - this.pos.y };
+        const trip = Math.min(TRIP_MS[1], Math.max(TRIP_MS[0], 200 + Math.hypot(to.x - from.x, to.y - from.y) * TRIP_MS_PER_PX));
+        this.fx.orb(from, to, trip);
+        this.later(trip, () => {
           this.pos = { ...dest };
           this.resetChains();
           this.hidden = false;
           this.fx.column(this.pos.x, this.pos.y);
+          this.fx.rings(this.pos.x, this.pos.y);
           this.voice.play('teleport-in');
           this.player.play('teleportIn', {
             fast: true,

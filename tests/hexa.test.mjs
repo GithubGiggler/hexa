@@ -35,6 +35,7 @@ function make(settings = {}) {
 }
 
 const floor = AREA.y + AREA.h;
+const TELEPORT_S = 2.4; // a whole teleport: vanishing, the trip as an orb (0.9 s at most), arriving
 
 test('she starts idle at her rest spot', () => {
   const { h } = make();
@@ -108,7 +109,7 @@ test('comeToPointer stays 50 to 80 px beside the pointer', () => {
   const dx = Math.abs(h.pos.x - 1200);
   assert.ok(dx >= 50 && dx <= 80, `dx ${dx}`);
   h.onPointer({ x: 1260, y: 720, inside: false });
-  advance(1.5);
+  advance(TELEPORT_S);
   const dx2 = Math.abs(h.pos.x - 1260);
   assert.ok(dx2 >= 50 && dx2 <= 80, `follows: dx ${dx2}`);
 });
@@ -166,11 +167,40 @@ test('reduced motion: teleport is a fade, not teleportOut', () => {
 test('full motion teleport shatters, leaves a slit, and arrives', () => {
   const { h, played, fxCalls, advance } = make();
   h.teleport({ x: 400, y: 900 });
-  advance(1.5);
+  advance(TELEPORT_S);
   assert.ok(played.includes('teleportOut') && played.includes('teleportIn'));
   assert.ok(fxCalls.some((c) => c[0] === 'slit'));
   assert.ok(fxCalls.some((c) => c[0] === 'shards'));
   assert.deepEqual(h.pos, { x: 400, y: 900 });
+});
+
+// how long a full-motion teleport takes, in seconds, to the nearest 50 ms
+function tripTime(dx) {
+  const { h, advance } = make();
+  h.teleport({ x: h.pos.x + dx, y: h.pos.y });
+  let t = 0;
+  while (h.mode === 'teleport' && t < 5) { advance(0.05); t += 0.05; }
+  return t;
+}
+
+test('between vanishing and arriving she travels as an orb, and lands inside rings', () => {
+  const { h, fxCalls, advance } = make();
+  const from = h.body();
+  h.teleport({ x: 400, y: 900 });
+  advance(2);
+  const orb = fxCalls.find((c) => c[0] === 'orb');
+  assert.ok(orb, 'an orb');
+  assert.ok(Math.hypot(orb[1].x - from.x, orb[1].y - from.y) < 1, 'from where she was');
+  const landed = h.body();
+  assert.ok(Math.hypot(orb[2].x - landed.x, orb[2].y - landed.y) < 1, 'to where she lands');
+  assert.ok(fxCalls.some((c) => c[0] === 'rings'));
+});
+
+test('a farther teleport is a longer trip, but never past the watchdog', () => {
+  const near = tripTime(-150);
+  const far = tripTime(-2000);
+  assert.ok(far > near + 0.2, `near ${near} s, far ${far} s`);
+  assert.ok(far < 2.4, `far ${far} s`);
 });
 
 test('celebrate plays exit 0 with its effects, then resolves back to idle', async () => {
@@ -289,7 +319,7 @@ test('while Claude works she perches on the window in front', () => {
   const { h, player, advance } = make();
   h.setWindows({ fg: 5, wins: [konsole()] });
   h.goToWork();
-  advance(1.5);
+  advance(TELEPORT_S);
   assert.equal(h.perch?.id, 5);
   assert.equal(h.mode, 'work');
   assert.equal(player.stanceName, 'sit');
@@ -301,7 +331,7 @@ test('she rides along when her window moves', () => {
   const { h, advance } = make();
   h.setWindows({ fg: 5, wins: [konsole()] });
   h.goToWork();
-  advance(1.5);
+  advance(TELEPORT_S);
   const dx = h.pos.x - 400;
   h.setWindows({ fg: 5, wins: [konsole({ x: 500, y: 550 })] });
   assert.deepEqual(h.pos, { x: 500 + dx, y: 550 + 66 });
@@ -316,7 +346,7 @@ test('she falls when her window closes, is maximised or is covered', () => {
     const { h, advance } = make();
     h.setWindows({ fg: 5, wins: [konsole()] });
     h.goToWork();
-    advance(1.5);
+    advance(TELEPORT_S);
     assert.equal(h.perch?.id, 5);
     h.setWindows(next);
     assert.equal(h.mode, 'fall', JSON.stringify(next));
@@ -365,7 +395,7 @@ test('possess: she dives into the window she sits on, takes it over, and comes o
   const other = { id: 8, x: 1500, y: 500, w: 800, h: 600, max: false };
   h.setWindows({ fg: 5, wins: [konsole(), other] });
   h.goToWork();
-  advance(1.5);
+  advance(TELEPORT_S);
   h.setMode('idle');
   assert.equal(h.canPossess(), true);
   const done = h.possess();
@@ -385,7 +415,7 @@ test('possess is off when she is not sitting, the setting is off, or motion is r
     const { h, advance } = make(settings);
     h.setWindows({ fg: 5, wins: [konsole()] });
     h.goToWork();
-    advance(1.5);
+    advance(TELEPORT_S);
     assert.equal(h.canPossess(), false, JSON.stringify(settings));
   }
 });
